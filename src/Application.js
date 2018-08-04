@@ -6,6 +6,10 @@
         game end
         back to main menu
         pilot tilt animation
+        cap bullets that can exist
+        cap bubbles that can exist
+        comments
+        scale game better on ipad
 */
 
 import device;

@@ -17,8 +17,14 @@ exports = Class(ui.View, function (supr) {
 
         this.px = 0;
 
+        // todo: research how much these events are firing
+        // todo: is it better to put logic here or inside main loop?
         this.on('InputMove', bind(this, function (event, point) {
           this.px = point.x;
+        }));
+
+        this.on('InputSelect', bind(this, function (event, point) {
+          this.emit('input:fire');
         }));
     }
 

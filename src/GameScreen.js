@@ -27,6 +27,7 @@ exports = Class(ui.View, function (supr) {
 
         this.midpoint = this.style.width * 0.5;
         this.maxwidth = this.style.width;
+        this.ammo = 1;
 
         /*
             Screen Messages
@@ -46,13 +47,15 @@ exports = Class(ui.View, function (supr) {
             blockEvents: true,
         });
 
+        var dock_height = 50;
+
         /*
             Player
         */
         this.pilot = new Pilot({
             superview: this,
             x: this.style.width * 0.5,
-            y: this.style.height,
+            y: this.style.height - dock_height,
             blockEvents: true,
         });
 
@@ -81,6 +84,15 @@ exports = Class(ui.View, function (supr) {
             width: this.style.width,
             height: this.style.height,
         });
+
+        // Shoot bubbles
+        this.input.on('input:fire', bind(this, function () {
+            if (this.ammo > 0) {
+                // Add bullet to world, empty ammo.
+                this.world.shoot(this.ammo);
+                // this.ammo = 0;
+            }
+        }));
     };
 });
 
