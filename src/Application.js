@@ -9,7 +9,7 @@
         cap bullets that can exist
         cap bubbles that can exist
         comments
-        scale game better on ipad
+        scale game better!! constant game world size
 */
 
 import device;

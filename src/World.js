@@ -32,6 +32,7 @@ exports = Class(ui.View, function (supr) {
     this.build = function () {
 
         this.halfwidth = this.style.width * 0.5;
+        this.bubble_radius = 80;
 
         var circle = new ui.ImageView({
             superview: this,
@@ -44,8 +45,8 @@ exports = Class(ui.View, function (supr) {
 
         this.bubbles = [];
 
-        var bw = img_bubbles[0].getWidth();
-        var bh = img_bubbles[0].getHeight();
+        var bw = this.bubble_radius;//img_bubbles[0].getWidth();
+        var bh = this.bubble_radius;//img_bubbles[0].getHeight();
 
         calculate_hexmap(bw, 6, this.halfwidth, this.halfwidth, 3);
 
@@ -97,10 +98,16 @@ exports = Class(ui.View, function (supr) {
         this.temp_bubble.style.x = next_x;
         this.temp_bubble.style.y = next_y;
 
-        var local_quad = get_quad_from_pos(this.quadtree, [next_x, next_y], 0, this.quadtree.pos);
-        console.log("gotcha boss", next_x, next_y);
-        for (var i = 0; i < local_quad.list_ents.length; i++) {
-            local_quad.list_ents[i].style.opacity = 0;
+        var quadlist = [];
+        get_quads_from_circle(this.quadtree, [next_x, next_y], 0, this.quadtree.pos, this.bubble_radius, quadlist);
+
+        // console.log("gotcha boss");
+        // console.log(quadlist);
+
+        for (var i = 0; i < quadlist.length; i++) {
+            for (var k = 0; k < quadlist[i].list_ents.length; k++) {
+                quadlist[i].list_ents[k].style.opacity = 0;
+            }
         }
     };
 });
@@ -158,6 +165,28 @@ function calculate_hexmap (diameter, reach, midpointx, midpointy, cutoff) {
         }
         evenodd_x = !evenodd_x;
     }
+}
+
+/* ---------------------------------------------------
+    COLLISION
+*/
+function minkowski_circle_square (cx, cy, cr, sx, sy, w) {
+    // minkowski
+    var distx = Math.abs(cx - sx);
+    var disty = Math.abs(cy - sy);
+
+    if (distx > (w * 0.5 + cr)) { return false; }
+    if (disty > (w * 0.5 + cr)) { return false; }
+
+    if (distx <= (w * 0.5)) { return true; }
+    if (disty <= (w * 0.5)) { return true; }
+
+    var xoff = distx - w * 0.5;
+    var yoff = disty - w * 0.5;
+
+    var corner_dist = xoff * xoff + yoff * yoff;
+
+    return (corner_dist <= (cr*cr));
 }
 
 /* ---------------------------------------------------
@@ -244,7 +273,6 @@ function find_and_add_to_quad (tree, entity, pos, found_quad, quad_pos) {
 }
 
 function split_quad (tree, quad) {
-    console.log("Splitting");
     quad.has_children = true;
     var level = quad.level+1;
     var halfwidth = quad.width * 0.5;
@@ -292,20 +320,34 @@ function get_quad_from_pos (tree, pos, found_quad, quad_pos) {
         found_quad = quads[3];
     }
 
-    console.log(found_quad);
-
     if (found_quad.has_children) {
-        console.log("checking...");
         return get_quad_from_pos(tree, pos, found_quad, found_quad.pos);
     }
     else {
         return found_quad;
     }
-    console.log("qut");
 }
 
-// blist* get_list_from_quad(QuadTree* tree, vec2 pos)
-// {
-//     QuadTree::Quad* fq = get_quad_from_pos(tree,pos);
-//     return &fq->list_ents;
-// }
+
+function get_quads_from_circle (tree, pos, found_quad, quad_pos, radius, quadlist) {
+    // uses minkowski difference to check which quads a circle is intersecting
+    var quads;
+
+    if (found_quad == 0) {
+        quads = tree.quads;
+    }
+    else {
+        quads = found_quad.quads;
+    }
+
+    var i = 0;
+    for (var i = 0; i < 4; i++) {
+        if (minkowski_circle_square(pos[0], pos[1], radius, quads[i].pos[0], quads[i].pos[1], quads[i].width)) {
+            if (quads[i].has_children) {
+                return get_quads_from_circle(tree, pos, quads[i], quads[i].pos, radius, quadlist);
+            } else {
+                quadlist.push(quads[i]);
+            }
+        }
+    }
+}
