@@ -118,14 +118,16 @@ function start_game_flow () {
 }
 
 function play_game () {
-    that = this;
+    var that = this;
 
-    that.tick = function (dt) {
+    that.tick = function (ms) {
+        var dt = ms/1000;
         // get input on -0.5 to 0.5 scale
-        var local_x = (this.px - this.midpoint) / this.maxwidth;
+        var local_x = (that.px - that.midpoint) / that.maxwidth;
 
-        // todo: cap radians
-        this.world.style.r += local_x * 0.1;
+        var vel = local_x * 0.05;
+
+        this.world.update(vel, dt);
     };
 }
 

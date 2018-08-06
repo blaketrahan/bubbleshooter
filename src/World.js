@@ -33,6 +33,8 @@ exports = Class(ui.View, function (supr) {
 
         this.halfwidth = this.style.width * 0.5;
         this.bubble_radius = 80;
+        this.active_bubbles = [];
+        this.prev_r = 0;
 
         var circle = new ui.ImageView({
             superview: this,
@@ -45,8 +47,8 @@ exports = Class(ui.View, function (supr) {
 
         this.bubbles = [];
 
-        var bw = this.bubble_radius;//img_bubbles[0].getWidth();
-        var bh = this.bubble_radius;//img_bubbles[0].getHeight();
+        var bw = this.bubble_radius;
+        var bh = this.bubble_radius;
 
         calculate_hexmap(bw, 6, this.halfwidth, this.halfwidth, 3);
 
@@ -75,40 +77,111 @@ exports = Class(ui.View, function (supr) {
         }
 
         console.log(this.quadtree);
-
-        this.temp_bubble = new ui.ImageView({
-            superview: this,
-            image: img_bubbles[0],
-            x: 0,
-            y: 0,
-            width: bw,
-            height: bh,
-            offsetX: -bw * 0.5,
-            offsetY: -bh * 0.5,
-        });
     };
 
     this.shoot = function (color) {
         var r = -this.style.r + 1.57079632679; // todo: this
-        var next_x = this.halfwidth + (Math.cos(r) * this.halfwidth);
-        var next_y = this.halfwidth + (Math.sin(r) * this.halfwidth);
+        var next_x = this.halfwidth + (Math.cos(r) * this.halfwidth * 0.9);
+        var next_y = this.halfwidth + (Math.sin(r) * this.halfwidth * 0.9);
 
-        next_x = (next_x + this.halfwidth)/2;
-        next_y = (next_y + this.halfwidth)/2;
-        this.temp_bubble.style.x = next_x;
-        this.temp_bubble.style.y = next_y;
+        var curr_bubble = new ui.ImageView({
+            superview: this,
+            image: img_bubbles[0],
+            width: this.bubble_radius,
+            height: this.bubble_radius,
+            offsetX: -this.bubble_radius * 0.5,
+            offsetY: -this.bubble_radius * 0.5,
+            x: next_x,
+            y: next_y,
+        });
 
-        var quadlist = [];
-        get_quads_from_circle(this.quadtree, [next_x, next_y], 0, this.quadtree.pos, this.bubble_radius, quadlist);
+        curr_bubble.prev_x = next_x;
+        curr_bubble.prev_y = next_y;
 
-        // console.log("gotcha boss");
-        // console.log(quadlist);
+        curr_bubble.elapsed = 0;
+        // curr_bubble.perp_vel = this.perp_vel;
+        // console.log(curr_bubble.perp_vel);
 
-        for (var i = 0; i < quadlist.length; i++) {
-            for (var k = 0; k < quadlist[i].list_ents.length; k++) {
-                quadlist[i].list_ents[k].style.opacity = 0;
+        // 2D crossproduct (Y,-X), normalized
+        // curr_bubble.crossproduct = [];
+        // var y = next_y - this.halfwidth;
+        // var x = next_x - this.halfwidth;
+        // var vec_length = Math.sqrt(x * x + y * y);
+        // curr_bubble.crossproduct[0] = (y) / vec_length;
+        // curr_bubble.crossproduct[1] = -(x) / vec_length;
+
+        // console.log(curr_bubble.crossproduct);
+
+        this.active_bubbles.push(curr_bubble);
+
+        // var quadlist = [];
+        // get_quads_from_circle(this.quadtree, [next_x, next_y], 0, this.quadtree.pos, this.bubble_radius, quadlist);
+
+        // for (var i = 0; i < quadlist.length; i++) {
+        //     for (var k = 0; k < quadlist[i].list_ents.length; k++) {
+        //         quadlist[i].list_ents[k].style.opacity = 0;
+        //     }
+        // }
+        this.prev_r = r;
+    };
+
+    this.update = function (vel, dt) {
+        // todo: cap radians
+        this.style.r += vel; // todo: add dt to this
+
+        var remaining_bubbles = [];
+
+        // lerp each bubble to center
+        for (var i = 0; i < this.active_bubbles.length; i++) {
+            var deactivate = false;
+
+            var el = this.active_bubbles[i];
+
+            el.prev_x = el.style.x;
+            el.prev_y = el.style.y;
+
+            el.elapsed += dt/2;
+            if (el.elapsed > 1) {
+                el.elapsed = 1;
+            }
+            var v = el.elapsed;
+            el.style.x = (this.halfwidth * v) + (el.style.x * (1 - v));
+            el.style.y = (this.halfwidth * v) + (el.style.y * (1 - v));
+
+            if (el.elapsed < 1) {
+                var quadlist = [];
+                get_quads_from_circle(this.quadtree, [el.style.x, el.style.y], 0, this.quadtree.pos, this.bubble_radius, quadlist);
+                if  (quadlist.length > 0) {
+
+                } else {
+                    remaining_bubbles.push(this.active_bubbles[i]);
+                }
+                var deepest_overlap = 0;
+                for (var q = 0; q < quadlist.length; q++) {
+                    for (var k = 0; k < quadlist[q].list_ents.length; k++) {
+                        // quadlist[q].list_ents[k].style.opacity = 0;
+
+                        var overlap = intersect_circle_circle(
+                            el.style.x, el.style.y,
+                            quadlist[q].list_ents[k].style.x,
+                            quadlist[q].list_ents[k].style.y,
+                            40, 40);
+                        if (overlap && overlap > deepest_overlap) {
+                            deepest_overlap = overlap;
+                            console.log(overlap);
+                        }
+                    }
+                }
+                console.log("deepest",deepest_overlap);
+                if (deepest_overlap > 0) {
+                    deactivate = true;
+                }
+            }
+            if (!deactivate) {
+                remaining_bubbles.push(this.active_bubbles[i]);
             }
         }
+        this.active_bubbles = remaining_bubbles;
     };
 });
 
@@ -189,6 +262,19 @@ function minkowski_circle_square (cx, cy, cr, sx, sy, w) {
     return (corner_dist <= (cr*cr));
 }
 
+function intersect_circle_circle (ax, ay, bx, by, ar, br) {
+    var overlap = 0;
+    var x = bx - ax;
+    var y = by - ay;
+    x *= x;
+    y *= y;
+    var dist = Math.sqrt(x + y);
+    var r = (ar + br);
+    if (dist - r <= 0) {
+        overlap = r - dist;
+    }
+    return overlap;
+}
 /* ---------------------------------------------------
     QUAD TREES
 */
