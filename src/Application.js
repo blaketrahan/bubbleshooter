@@ -10,6 +10,13 @@
         cap bubbles that can exist
         comments
         scale game better!! constant game world size
+        use strict?
+        check for todos in code
+        if you hit bubbles, you crash
+        remove old files
+        clean up styles
+        rewrite ugly code
+        remove unused code
 */
 
 import device;
