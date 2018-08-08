@@ -6,6 +6,8 @@ import ui.resource.Image as Image;
 var img_circle = new Image({url: "resources/images/circle.png"});
 var debugcolor = new Image({url: "resources/images/debug.png"});
 
+"use strict";
+
 var img_bubbles =
 [
     new Image({url: "resources/images/ball_blue-flat.png"}),
