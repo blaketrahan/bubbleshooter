@@ -18,8 +18,12 @@ var img_bubbles =
 ];
 
 // todo: remove this
-var temp_list = [];
 var temp_stuff;
+
+var Score = {
+    total: 0,
+    against: 0,
+};
 
 exports = Class(ui.View, function (supr) {
 
@@ -50,21 +54,16 @@ exports = Class(ui.View, function (supr) {
             height: this.style.height,
         });
 
-        this.bubbles = [];
-
-        // HexMap.calculate_hexmap(bw, 13, this.halfwidth, this.halfwidth, 3);
-        HexMap.calculate_hexmap(this.bubbles);
+        HexMap.calculate_hexmap();
 
         this.quadtree = init_quads(this.halfwidth * 2, this.halfwidth, this.halfwidth);
 
-        for (var i = 0; i < this.bubbles.length; i++) {
-            this.bubbles[i].style.opacity = 0.1;
-            var pos = [this.bubbles[i].style.x, this.bubbles[i].style.y];
-            find_and_add_to_quad(this.quadtree, this.bubbles[i], pos, 0, this.quadtree.pos);
+        for (var key in HexMap.pts) {
+            if (HexMap.pts.hasOwnProperty(key)) {
+                var pos = [HexMap.pts[key].x, HexMap.pts[key].y];
+                find_and_add_to_quad(this.quadtree, HexMap.pts[key], pos, 0, this.quadtree.pos);
+            }
         }
-        // console.log(this.quadtree);
-
-        // console.log(this.quadtree);
     };
 
     this.shoot = function (color) {
@@ -72,9 +71,11 @@ exports = Class(ui.View, function (supr) {
         var next_x = this.halfwidth + (Math.cos(r) * this.halfwidth * 0.9);
         var next_y = this.halfwidth + (Math.sin(r) * this.halfwidth * 0.9);
 
+        var type = get_random_inclusive(0,4);
+
         var curr_bubble = new ui.ImageView({
             superview: this,
-            image: img_bubbles[1],
+            image: img_bubbles[type],
             width: this.bubble_radius,
             height: this.bubble_radius,
             offsetX: -this.bubble_radius * 0.5,
@@ -83,28 +84,17 @@ exports = Class(ui.View, function (supr) {
             y: next_y,
         });
 
+        curr_bubble.data = {
+            hex_key: null,
+            type: type,
+        };
+
         curr_bubble.prev_x = next_x;
         curr_bubble.prev_y = next_y;
 
         curr_bubble.elapsed = 0;
-        // curr_bubble.perp_vel = this.perp_vel;
-        // console.log(curr_bubble.perp_vel);
-
-        // 2D crossproduct (Y,-X), normalized
-        // curr_bubble.crossproduct = [];
-        // var y = next_y - this.halfwidth;
-        // var x = next_x - this.halfwidth;
-        // var vec_length = Math.sqrt(x * x + y * y);
-        // curr_bubble.crossproduct[0] = (y) / vec_length;
-        // curr_bubble.crossproduct[1] = -(x) / vec_length;
-
-        // console.log(curr_bubble.crossproduct);
 
         this.active_bubbles.push(curr_bubble);
-
-        // var quadlist = [];
-        // console.log("-----");
-        // get_quads_from_circle(this.quadtree, [next_x, next_y], 0, this.quadtree.pos, this.bubble_radius, quadlist);
 
         this.prev_r = r;
     };
@@ -125,8 +115,9 @@ exports = Class(ui.View, function (supr) {
             el.prev_y = el.style.y;
 
             el.elapsed += dt * 0.125;
-            if (el.elapsed > 1) {
+            if (el.elapsed >= 1) {
                 el.elapsed = 1;
+                deactivate = true;
             }
             var v = el.elapsed;
             el.style.x = (this.halfwidth * v) + (el.style.x * (1 - v));
@@ -138,52 +129,100 @@ exports = Class(ui.View, function (supr) {
 
                 var overlap = 0;
                 var detected_hex_key;
-                for (var q = 0; q < quadlist.length; q++) {
-                    for (var k = 0; k < quadlist[q].list_ents.length; k++) {
-                        quadlist[q].list_ents[k].style.opacity = 1;
+
+                for (var i_q = 0; i_q < quadlist.length; i_q++) {
+
+                    for (var i_e = 0; i_e < quadlist[i_q].list_ents.length; i_e++) {
+
+                        if (quadlist[i_q].list_ents[i_e].data === null) { continue; }
+
+                        var bindex = quadlist[i_q].list_ents[i_e].data.bubble_index;
+                        var target = Bubbles.list[bindex];
                         var curr_overlap = intersect_circle_circle(
                             el.style.x, el.style.y,
-                            quadlist[q].list_ents[k].style.x,
-                            quadlist[q].list_ents[k].style.y,
-                            41, 41);
-                        // console.log(curr_overlap);
+                            target.style.x,
+                            target.style.y,
+                            40, 40);
+
                         if (curr_overlap !== false && overlap < curr_overlap) {
-                            // console.log(quadlist);
                             overlap = curr_overlap;
-                            detected_hex_key = quadlist[q].list_ents[k].data.hex_key;
+                            detected_hex_key = quadlist[i_q].list_ents[i_e].key;
                         }
                     }
                 }
+
                 if (overlap > 0) {
                     deactivate = true;
-                    // console.log(detected_hex_key);
-                    var hexbubble_pair = HexMap.get_neighbors(detected_hex_key);
-                    // console.log(hexbubble_pair);
+                    var hexes = HexMap.get_neighbors(detected_hex_key);
 
                     // Find empty hex
                     var closest_hex = null;
                     var closest_dist = 9999999;
-                    for (var hb = 0; hb < hexbubble_pair.length; hb++) {
-                        var key = hexbubble_pair[hb];
+                    for (var hb = 0; hb < hexes.length; hb++) {
+
+                        var key = hexes[hb];
                         if (HexMap.pts[key].data !== null) { continue; }
-                        // console.log(HexMap.pts[key]);
+
                         var ABx = HexMap.pts[key].x - el.style.x;
                         var ABy = HexMap.pts[key].y - el.style.y;
                         var d2 = (ABx*ABx) + (ABy*ABy);
-                        // console.log(d2);
+
                         if (d2 < closest_dist) {
                             closest_dist = d2;
                             closest_hex = key;
                         }
                     }
-                    // console.log(closest_hex);
+
                     if (closest_hex !== null) {
                         el.style.x = HexMap.pts[closest_hex].x;
                         el.style.y = HexMap.pts[closest_hex].y;
-                    }
+                        // pair up
+                        el.data.hex_key = closest_hex;
+                        HexMap.pts[closest_hex].data = {
+                            bubble_index: Bubbles.list.length,
+                            type: el.data.type,
+                        };
+                        Bubbles.list.push(el);
 
-                    // todo: pair hex and bubble
+                        function find_cluster (list, type, key) {
+                            var neighbors = HexMap.get_neighbors(key);
+
+                            for (var i_n = 0; i_n < neighbors.length; i_n++) {
+
+                                if (HexMap.pts[neighbors[i_n]].data === null) { continue; }
+
+                                if (HexMap.pts[neighbors[i_n]].data.type === type) {
+                                    if (!like_neighbors.includes(neighbors[i_n])) {
+                                        like_neighbors.push(neighbors[i_n]);
+                                        find_cluster(like_neighbors, type, neighbors[i_n]);
+                                    }
+                                }
+                            }
+                        }
+
+                        function remove_cluster (list) {
+                            for (var i_n = 0; i_n < list.length; i_n++) {
+                                var index = HexMap.pts[list[i_n]].data.bubble_index;
+                                // Bubbles.list[index].hex_key = null;
+                                HexMap.pts[list[i_n]].data = null;
+                                Bubbles.clear(index);
+                                Score.total++;
+                            }
+                        }
+
+                        var neighbors = HexMap.get_neighbors(closest_hex);
+                        var type = el.data.type;
+                        var like_neighbors = [];
+                        find_cluster(like_neighbors, type, closest_hex);
+                        console.log(like_neighbors);
+                        if (like_neighbors.length > 2) {
+                            remove_cluster(like_neighbors);
+                        }
+                    }
                 }
+            }
+            else {
+                this.active_bubbles[i].removeFromSuperview();
             }
             if (!deactivate) {
                 remaining_bubbles.push(this.active_bubbles[i]);
@@ -200,6 +239,55 @@ function get_random_inclusive (min, max)
     max = Math.floor(max);
     return Math.floor(Math.random() * (max - min)) + min;
 }
+/* ---------------------------------------------------
+    BUBBLES
+*/
+var Bubbles = {
+    list: [],
+    empties: [],
+    max_length: 100, // todo: replace this with max hexes + some for active
+    create: function (x, y, key) {
+
+        var type = get_random_inclusive(0,4);
+        var bubble = new ui.ImageView({
+            superview: temp_stuff,
+            image: img_bubbles[type],
+            x: x,
+            y: y,
+            width: 80,
+            height: 80,
+            offsetX: -80 * 0.5,
+            offsetY: -80 * 0.5,
+        });
+
+        var index = null;
+        if (this.list.length >= this.max_length)
+        {
+            index = this.get_an_index();
+            this.list[index] = bubble;
+        } else {
+            index = this.list.length;
+            this.list.push(bubble);
+        }
+
+        // pair bubble and hex
+        this.list[index].data = {
+            hex_key: key,
+            type: type,
+        };
+        HexMap.pts[key].data = {
+            bubble_index: index,
+            type: type,
+        };
+    },
+    get_an_index: function () {
+        return this.empties.pop();
+    }
+    clear: function (index) {
+        this.list[index].data = null;
+        this.list[index].removeFromSuperview();
+        this.empties.push(index);
+};
 
 /* ---------------------------------------------------
     HEX MAP
@@ -212,6 +300,7 @@ function Hex(q, r, s, data) {
         s: s,
         x: 0,
         y: 0,
+        key: "",
         data: data,
     };
 }
@@ -264,8 +353,8 @@ var HexMap = {
             hex_neighbor_key(this.pts[key], 5),
         ];
     },
-    calculate_hexmap: function (arr) {
-        var map_radius = 11;
+    calculate_hexmap: function () {
+        var map_radius = 13;
         for (var q = -map_radius; q <= map_radius; q++) {
             var r1 = Math.max(-map_radius, -q - map_radius);
             var r2 = Math.min(map_radius, -q + map_radius);
@@ -280,10 +369,11 @@ var HexMap = {
 
         for (var key in this.pts) {
             if (this.pts.hasOwnProperty(key)) {
-                // if (this.pts[i].active) { continue; }
+
                 var htp = hex_to_pixel(layout, this.pts[key]);
                 this.pts[key].x = htp.x;
                 this.pts[key].y = htp.y;
+                this.pts[key].key = key;
 
                 var inner_cutoff = 3;
                 var outer_cutoff = 5;
@@ -295,26 +385,7 @@ var HexMap = {
 
                 if (inactive) { continue; }
 
-                var bubble = new ui.ImageView({
-                    superview: temp_stuff,
-                    image: img_bubbles[0],
-                    x: htp.x,
-                    y: htp.y,
-                    width: 80,
-                    height: 80,
-                    offsetX: -80 * 0.5,
-                    offsetY: -80 * 0.5,
-                });
-
-                // pair bubble and hex
-                bubble.data = {
-                    hex_key: key,
-                };
-                this.pts[key].data = {
-                    bubble_index: arr.length,
-                };
-                // console.log(this.pts[key].data);
-                arr.push(bubble);
+                Bubbles.create(htp.x, htp.y, key);
             }
         }
 
@@ -354,8 +425,8 @@ function intersect_circle_circle (ax, ay, bx, by, ar, br) {
 /* ---------------------------------------------------
     QUAD TREES
 */
-var MAX_ENTITIES = 8;
-var MAX_LEVELS = 15;
+var MAX_ENTITIES = 15;
+var MAX_LEVELS = 20;
 
 function QuadTree ( m1, m2, m3, m4, m5) {
     return {
@@ -470,7 +541,7 @@ function split_quad (tree, quad) {
     // }
 
     for (var i = 0; i < quad.list_ents.length; i++) {
-        var pos = [quad.list_ents[i].style.x, quad.list_ents[i].style.y];
+        var pos = [quad.list_ents[i].x, quad.list_ents[i].y];
         find_and_add_to_quad(tree, quad.list_ents[i], pos, quad, quad.pos);
     }
 }

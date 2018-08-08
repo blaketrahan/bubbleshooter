@@ -17,6 +17,8 @@
         clean up styles
         rewrite ugly code
         remove unused code
+        replace code with engine versions
+        put things into classes, clean up
 */
 
 import device;
