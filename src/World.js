@@ -60,7 +60,7 @@ exports = Class(ui.View, function (supr) {
             var pos = [this.bubbles[i].style.x, this.bubbles[i].style.y];
             find_and_add_to_quad(this.quadtree, this.bubbles[i], pos, 0, this.quadtree.pos);
         }
-        console.log(this.quadtree);
+        // console.log(this.quadtree);
 
         // console.log(this.quadtree);
     };
@@ -100,14 +100,10 @@ exports = Class(ui.View, function (supr) {
 
         this.active_bubbles.push(curr_bubble);
 
-        var quadlist = [];
-        get_quads_from_circle(this.quadtree, [next_x, next_y], 0, this.quadtree.pos, this.bubble_radius, quadlist);
+        // var quadlist = [];
+        // console.log("-----");
+        // get_quads_from_circle(this.quadtree, [next_x, next_y], 0, this.quadtree.pos, this.bubble_radius, quadlist);
 
-        for (var i = 0; i < quadlist.length; i++) {
-            for (var k = 0; k < quadlist[i].list_ents.length; k++) {
-                quadlist[i].list_ents[k].style.opacity = 0.15;
-            }
-        }
         this.prev_r = r;
     };
 
@@ -148,9 +144,9 @@ exports = Class(ui.View, function (supr) {
                             quadlist[q].list_ents[k].style.x,
                             quadlist[q].list_ents[k].style.y,
                             41, 41);
-                        console.log(curr_overlap);
+                        // console.log(curr_overlap);
                         if (curr_overlap !== false && overlap < curr_overlap) {
-                            console.log(quadlist);
+                            // console.log(quadlist);
                             overlap = curr_overlap;
                             detected_hex_key = quadlist[q].list_ents[k].data.hex_key;
                         }
@@ -161,38 +157,30 @@ exports = Class(ui.View, function (supr) {
                     // console.log(detected_hex_key);
                     var hexbubble_pair = HexMap.get_neighbors(detected_hex_key);
                     // console.log(hexbubble_pair);
+
+                    // Find empty hex
+                    var closest_hex = null;
+                    var closest_dist = 9999999;
                     for (var hb = 0; hb < hexbubble_pair.length; hb++) {
                         var key = hexbubble_pair[hb];
-                        if (HexMap.pts[key].data === null) { continue; }
-                        var b = HexMap.pts[key].data.bubble_index;
-                        // this.bubbles[b].style.opacity = 0.5;
+                        if (HexMap.pts[key].data !== null) { continue; }
+                        // console.log(HexMap.pts[key]);
+                        var ABx = HexMap.pts[key].x - el.style.x;
+                        var ABy = HexMap.pts[key].y - el.style.y;
+                        var d2 = (ABx*ABx) + (ABy*ABy);
+                        // console.log(d2);
+                        if (d2 < closest_dist) {
+                            closest_dist = d2;
+                            closest_hex = key;
+                        }
                     }
-                    // var empty_indices = HexMap.get_empty_neighbor_hexes(detected_hex_key);
-                    // console.log(empty_indices);
-                    // var nearest = 0;
-                    // var distance = 9999999;
-                    // for (var p = 0; p < empty_indices.length; p++)
-                    // {
-                    //     var ABx = HexMap.pts[empty_indices[p]].x - el.style.x;
-                    //     var ABy = HexMap.pts[empty_indices[p]].y - el.style.y;
-                    //     var d2 = (ABx*ABx) + (ABy*ABy);
-                    //     console.log(d2);
-                    //         console.log(nearest);
-                    //         console.log(empty_indices[p]);
-                    //         console.log(HexMap.pts[empty_indices[p]]);
-                    //     if (d2 < distance) {
-                    //         console.log("{---");
-                    //         console.log(d2);
-                    //         console.log(nearest);
-                    //         console.log(empty_indices[p]);
-                    //         console.log("---}");
-                    //         distance = d2;
-                    //         nearest = empty_indices[p];
-                    //     }
-                    // }
-                    // el.style.x = HexMap.pts[nearest].x;
-                    // el.style.y = HexMap.pts[nearest].y;
-                    // HexMap.pair_hex_bubble();
+                    // console.log(closest_hex);
+                    if (closest_hex !== null) {
+                        el.style.x = HexMap.pts[closest_hex].x;
+                        el.style.y = HexMap.pts[closest_hex].y;
+                    }
+
+                    // todo: pair hex and bubble
                 }
             }
             if (!deactivate) {
@@ -220,6 +208,8 @@ function Hex(q, r, s, data) {
         q: q,
         r: r,
         s: s,
+        x: 0,
+        y: 0,
         data: data,
     };
 }
@@ -290,6 +280,8 @@ var HexMap = {
             if (this.pts.hasOwnProperty(key)) {
                 // if (this.pts[i].active) { continue; }
                 var htp = hex_to_pixel(layout, this.pts[key]);
+                this.pts[key].x = htp.x;
+                this.pts[key].y = htp.y;
 
                 var inner_cutoff = 3;
                 var outer_cutoff = 5;
@@ -330,7 +322,6 @@ var HexMap = {
     COLLISION
 */
 function minkowski_circle_square (cx, cy, cr, sx, sy, w) {
-
     // minkowski
     var distx = Math.abs(cx - sx);
     var disty = Math.abs(cy - sy);
@@ -463,18 +454,18 @@ function split_quad (tree, quad) {
     quad.quads[2].pos[1] = quad.pos[1] - (halfwidth * 0.5);
     quad.quads[3].pos[1] = quad.pos[1] - (halfwidth * 0.5);
 
-    for (var i = 0; i < 4; i++) {
-        quad.quads[i].image = new ui.ImageView({
-            superview: temp_stuff,
-            image: debugcolor,
-            x: quad.quads[i].pos[0],
-            y: quad.quads[i].pos[1],
-            width: halfwidth,
-            height: halfwidth,
-            offsetX: -halfwidth * 0.5,
-            offsetY: -halfwidth * 0.5,
-        });
-    }
+    // for (var i = 0; i < 4; i++) {
+    //     quad.quads[i].image = new ui.ImageView({
+    //         superview: temp_stuff,
+    //         image: debugcolor,
+    //         x: quad.quads[i].pos[0],
+    //         y: quad.quads[i].pos[1],
+    //         width: halfwidth,
+    //         height: halfwidth,
+    //         offsetX: -halfwidth * 0.5,
+    //         offsetY: -halfwidth * 0.5,
+    //     });
+    // }
 
     for (var i = 0; i < quad.list_ents.length; i++) {
         var pos = [quad.list_ents[i].style.x, quad.list_ents[i].style.y];
@@ -518,7 +509,7 @@ function get_quads_from_circle (tree, pos, found_quad, quad_pos, radius, quadlis
     // uses minkowski difference to check which quads a circle is intersecting
     var quads;
 
-    if (found_quad == 0) {
+    if (found_quad === 0) {
         quads = tree.quads;
     }
     else {
@@ -526,9 +517,10 @@ function get_quads_from_circle (tree, pos, found_quad, quad_pos, radius, quadlis
     }
 
     for (var i = 0; i < 4; i++) {
-        if (minkowski_circle_square(pos[0], pos[1], radius, quads[i].pos[0], quads[i].pos[1], quads[i].width)) {
+        // console.log(i);
+        if (minkowski_circle_square(pos[0], pos[1], radius/2, quads[i].pos[0], quads[i].pos[1], quads[i].width)) {
             if (quads[i].has_children) {
-                return get_quads_from_circle(tree, pos, quads[i], quads[i].pos, radius, quadlist);
+                get_quads_from_circle(tree, pos, quads[i], quads[i].pos, radius, quadlist);
             } else {
                 quadlist.push(quads[i]);
             }
