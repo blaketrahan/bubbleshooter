@@ -184,7 +184,7 @@ exports = Class(ui.View, function (supr) {
                         };
                         Bubbles.list.push(el);
 
-                        function find_cluster (list, type, key) {
+                        function find_cluster (list, type, key, orphans) {
                             var neighbors = HexMap.get_neighbors(key);
 
                             for (var i_n = 0; i_n < neighbors.length; i_n++) {
@@ -196,6 +196,10 @@ exports = Class(ui.View, function (supr) {
                                         like_neighbors.push(neighbors[i_n]);
                                         find_cluster(like_neighbors, type, neighbors[i_n]);
                                     }
+                                } else {
+                                    if (!orphans.includes(neighbors[i_n])) {
+                                        orphans.push(neighbors[i_n]);
+                                    }
                                 }
                             }
                         }
@@ -203,20 +207,28 @@ exports = Class(ui.View, function (supr) {
                         function remove_cluster (list) {
                             for (var i_n = 0; i_n < list.length; i_n++) {
                                 var index = HexMap.pts[list[i_n]].data.bubble_index;
-                                // Bubbles.list[index].hex_key = null;
                                 HexMap.pts[list[i_n]].data = null;
                                 Bubbles.clear(index);
                                 Score.total++;
                             }
                         }
 
+                        function remove_orphans (list) {
+                            // todo: this
+                            // search neighbors until ceiling is found
+                        }
+
                         var neighbors = HexMap.get_neighbors(closest_hex);
                         var type = el.data.type;
                         var like_neighbors = [];
-                        find_cluster(like_neighbors, type, closest_hex);
+                        var orphans = [];
+                        find_cluster(like_neighbors, type, closest_hex, orphans);
                         console.log(like_neighbors);
                         if (like_neighbors.length > 2) {
                             remove_cluster(like_neighbors);
+                        }
+                        if (orphans.length) {
+                            remove_orphans(orphans);
                         }
                     }
                 }
@@ -281,12 +293,13 @@ var Bubbles = {
         };
     },
     get_an_index: function () {
-        return this.empties.pop();
-    }
+        return this.empties.pop(); // todo: TEST THIS!!!!
+    },
     clear: function (index) {
         this.list[index].data = null;
         this.list[index].removeFromSuperview();
         this.empties.push(index);
+    },
 };
 
 /* ---------------------------------------------------
@@ -383,9 +396,18 @@ var HexMap = {
                 var inactive = (AbsQ < inner_cutoff && AbsR < inner_cutoff && AbsS < inner_cutoff) ||
                    (AbsQ > outer_cutoff || AbsR > outer_cutoff || AbsS > outer_cutoff);
 
+
                 if (inactive) { continue; }
 
                 Bubbles.create(htp.x, htp.y, key);
+            }
+        }
+
+        // todo: find ceiling hexes
+        for (var key in this.pts) {
+            if (this.pts.hasOwnProperty(key)) {
+                var is_ceiling = (AbsQ < inner_cutoff + 1 && AbsR < inner_cutoff + 1 && AbsS < inner_cutoff + 1);
+                // text each for missing neighbor, only ones with missing neighbors will be ceiling
             }
         }
 
