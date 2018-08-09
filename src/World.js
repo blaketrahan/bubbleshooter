@@ -23,6 +23,7 @@ var temp_stuff;
 var Score = {
     total: 0,
     against: 0,
+    time: 0,
 };
 
 exports = Class(ui.View, function (supr) {
@@ -101,7 +102,10 @@ exports = Class(ui.View, function (supr) {
 
     this.update = function (vel, dt) {
         // todo: cap radians
+        Score.time += dt;
+
         this.style.r += vel; // todo: add dt to this
+
 
         var remaining_bubbles = [];
 
@@ -184,23 +188,50 @@ exports = Class(ui.View, function (supr) {
                         };
                         Bubbles.list.push(el);
 
-                        function find_cluster (list, type, key, orphans) {
+                        function find_cluster (list, type, key, affected, time) {
                             var neighbors = HexMap.get_neighbors(key);
 
                             for (var i_n = 0; i_n < neighbors.length; i_n++) {
 
                                 if (HexMap.pts[neighbors[i_n]].data === null) { continue; }
 
-                                if (HexMap.pts[neighbors[i_n]].data.type === type) {
-                                    if (!like_neighbors.includes(neighbors[i_n])) {
-                                        like_neighbors.push(neighbors[i_n]);
-                                        find_cluster(like_neighbors, type, neighbors[i_n]);
+                                var prev_time = HexMap.pts[neighbors[i_n]].time;
+                                HexMap.pts[neighbors[i_n]].time = time;
+
+                                if (prev_time !== time) {
+
+                                    if (HexMap.pts[neighbors[i_n]].data.type === type) {
+                                        list.push(neighbors[i_n]);
+                                        find_cluster(list, type, neighbors[i_n], affected, time);
                                     }
-                                } else {
-                                    if (!orphans.includes(neighbors[i_n])) {
-                                        orphans.push(neighbors[i_n]);
+                                    else {
+                                        affected.push(neighbors[i_n]);
                                     }
                                 }
+                            }
+                        }
+
+                        function find_orphans (list, key, time2) {
+
+                            var neighbors = HexMap.get_neighbors(key);
+
+                            for (var i_n = 0; i_n < neighbors.length; i_n++) {
+
+                                if (HexMap.pts[neighbors[i_n]].data === null) { continue; }
+
+                                var prev_time2 = HexMap.pts[neighbors[i_n]].time2;
+                                HexMap.pts[neighbors[i_n]].time2 = time2;
+
+                                if (prev_time2 !== time2) {
+                                    list.push(neighbors[i_n]);
+                                    find_orphans(list, neighbors[i_n], time2);
+                                }
+                            }
+                        }
+
+                        function has_ceiling (list) {
+                            for (var i_h = 0; i_h < list.length; i_h++) {
+                                if (HexMap.pts[list[i_h]].ceiling) return true;
                             }
                         }
 
@@ -213,22 +244,32 @@ exports = Class(ui.View, function (supr) {
                             }
                         }
 
-                        function remove_orphans (list) {
-                            // todo: this
-                            // search neighbors until ceiling is found
-                        }
-
                         var neighbors = HexMap.get_neighbors(closest_hex);
                         var type = el.data.type;
                         var like_neighbors = [];
+                        var affected = [];
                         var orphans = [];
-                        find_cluster(like_neighbors, type, closest_hex, orphans);
-                        console.log(like_neighbors);
+
+                        find_cluster(like_neighbors, type, closest_hex, affected, Score.time);
+
                         if (like_neighbors.length > 2) {
                             remove_cluster(like_neighbors);
-                        }
-                        if (orphans.length) {
-                            remove_orphans(orphans);
+
+                            for (var i_a = 0; i_a < affected.length; i_a++) {
+                                if (HexMap.pts[affected[i_a]].time2 === Score.time) { continue; }
+
+                                // add first element
+                                HexMap.pts[affected[i_a]].time2 = Score.time;
+                                orphans.push(affected[i_a]);
+
+                                find_orphans(orphans, affected[i_a], Score.time);
+
+                                if (!has_ceiling(orphans)) {
+                                    remove_cluster(orphans);
+                                }
+
+                                orphans.length = 0;
+                            }
                         }
                     }
                 }
@@ -314,7 +355,10 @@ function Hex(q, r, s, data) {
         x: 0,
         y: 0,
         key: "",
+        ceiling: false,
         data: data,
+        time: 0,
+        time2: 0,
     };
 }
 function Orientation(f0, f1, f2, f3, b0, b1, b2, b3, start_angle) {
@@ -380,6 +424,9 @@ var HexMap = {
         var layout_flat = Orientation(3.0 / 2.0, 0.0, Math.sqrt(3.0) / 2.0, Math.sqrt(3.0), 2.0 / 3.0, 0.0, -1.0 / 3.0, Math.sqrt(3.0) / 3.0, 0.0);
         var layout = Layout(layout_flat, {x:50,y:50}, {x:temp_stuff.halfwidth,y:temp_stuff.halfwidth});
 
+        var inner_cutoff = 3;
+        var outer_cutoff = 5;
+
         for (var key in this.pts) {
             if (this.pts.hasOwnProperty(key)) {
 
@@ -388,14 +435,11 @@ var HexMap = {
                 this.pts[key].y = htp.y;
                 this.pts[key].key = key;
 
-                var inner_cutoff = 3;
-                var outer_cutoff = 5;
                 var AbsQ = Math.abs(this.pts[key].q);
                 var AbsR = Math.abs(this.pts[key].r);
                 var AbsS = Math.abs(this.pts[key].s);
                 var inactive = (AbsQ < inner_cutoff && AbsR < inner_cutoff && AbsS < inner_cutoff) ||
                    (AbsQ > outer_cutoff || AbsR > outer_cutoff || AbsS > outer_cutoff);
-
 
                 if (inactive) { continue; }
 
@@ -403,14 +447,17 @@ var HexMap = {
             }
         }
 
-        // todo: find ceiling hexes
         for (var key in this.pts) {
             if (this.pts.hasOwnProperty(key)) {
-                var is_ceiling = (AbsQ < inner_cutoff + 1 && AbsR < inner_cutoff + 1 && AbsS < inner_cutoff + 1);
-                // text each for missing neighbor, only ones with missing neighbors will be ceiling
+                if (this.pts[key].data === null) { continue; }
+
+                var AbsQ = Math.abs(this.pts[key].q);
+                var AbsR = Math.abs(this.pts[key].r);
+                var AbsS = Math.abs(this.pts[key].s);
+
+                this.pts[key].ceiling = (AbsQ < inner_cutoff + 1 && AbsR < inner_cutoff + 1 && AbsS < inner_cutoff + 1);
             }
         }
-
     },
 };
 /* ---------------------------------------------------
@@ -549,6 +596,9 @@ function split_quad (tree, quad) {
     quad.quads[2].pos[1] = quad.pos[1] - (halfwidth * 0.5);
     quad.quads[3].pos[1] = quad.pos[1] - (halfwidth * 0.5);
 
+    /*
+        Convenient views for debugging
+    */
     // for (var i = 0; i < 4; i++) {
     //     quad.quads[i].image = new ui.ImageView({
     //         superview: temp_stuff,
