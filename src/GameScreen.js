@@ -26,8 +26,6 @@ exports = Class(ui.View, function (supr) {
 
         this.midpoint = this.style.width * 0.5;
         this.maxwidth = this.style.width;
-        this.ammo = 1;
-        this.active_shots = 0;
 
         /*
             Screen Messages
@@ -90,16 +88,11 @@ exports = Class(ui.View, function (supr) {
         // todo: research how much these events are firing
         // todo: is it better to put logic here or inside main loop?
         this.input.on('InputMove', bind(this, function (event, point) {
-          this.px = point.x;
+            this.px = point.x;
         }));
 
         this.input.on('InputSelect', bind(this, function (event, point) {
-
-            if (this.ammo > 0) {
-                // Add bullet to world, empty ammo.
-                this.world.shoot(this.ammo);
-                // this.ammo = 0;
-            }
+            this.world.shoot();
         }));
     };
 });

@@ -8,6 +8,8 @@ var debugcolor = new Image({url: "resources/images/debug.png"});
 
 "use strict";
 
+var MAX_TYPES = 4;
+
 var img_bubbles =
 [
     new Image({url: "resources/images/ball_blue.png"}),
@@ -43,8 +45,8 @@ exports = Class(ui.View, function (supr) {
         temp_stuff = this;
         this.halfwidth = this.style.width * 0.5;
         this.bubble_radius = 80;
-
-        this.prev_r = 0;
+        this.ammo = 0;
+        this.rotation = 0;
 
         var circle = new ui.ImageView({
             superview: this,
@@ -54,6 +56,8 @@ exports = Class(ui.View, function (supr) {
             width: this.style.width,
             height: this.style.height,
         });
+
+        Bubbles.refill_depot(this.halfwidth);
 
         HexMap.calculate_hexmap();
 
@@ -67,16 +71,17 @@ exports = Class(ui.View, function (supr) {
         }
     };
 
-    this.shoot = function (color) {
-        var r = -this.style.r + 1.57079632679; // todo: this
-        var next_x = this.halfwidth + (Math.cos(r) * this.halfwidth * 0.9);
-        var next_y = this.halfwidth + (Math.sin(r) * this.halfwidth * 0.9);
+    this.shoot = function () {
+        if (this.ammo === 0) { return; }
 
-        var type = get_random_inclusive(0,4);
+        var next_x = this.halfwidth + (Math.cos(this.rotation) * this.halfwidth * 0.9);
+        var next_y = this.halfwidth + (Math.sin(this.rotation) * this.halfwidth * 0.9);
 
-        Bubbles.create(next_x, next_y, null, type);
+        // var type = get_random_inclusive(0, MAX_TYPES);
 
-        this.prev_r = r;
+        Bubbles.create(next_x, next_y, null, this.ammo);
+
+        this.ammo = 0;
     };
 
     this.update = function (vel, dt) {
@@ -85,7 +90,23 @@ exports = Class(ui.View, function (supr) {
 
         this.style.r += vel; // todo: add dt to this
 
+        /* TODO: THIS ----------- */
+        this.rotation = -this.style.r + 1.57079632679; // todo: this
+        // if (this.rotation < 0) {
+            // this.rotation += 6.28318530718;
+        // }
+        // console.log(this.rotation);
         // check for ammo pickup
+        if (this.ammo === 0) {
+            for (var i = 0; i < Bubbles.depot.length; i++) {
+                var diff = this.rotation - (((360/Bubbles.depot.length) * i) * Math.PI / 180);
+                // console.log(diff);
+                if (Math.abs(diff) < 1) {
+                    this.ammo = Bubbles.depot[i].data.type;
+                }
+            }
+        }
+        /* TODO: THIS ----------- */
 
         var remaining_bubbles = [];
 
@@ -277,6 +298,7 @@ var Bubbles = {
     empties: [], // empty indices in bubble list
     active: [], // bubbles not paired with hex (ie, moving)
     max_length: 700, // todo: replace this with max hexes + some for active
+    depot: [null,null,null, null],
     attach: function (el, key) {
         var index = null;
 
@@ -296,9 +318,9 @@ var Bubbles = {
             type: el.data.type,
         };
     },
-    create: function (x, y, key = null, t = 0) {
+    create: function (x, y, key = null, t = 0, d = -1) {
 
-        var type = t || get_random_inclusive(0,4);
+        var type = t || get_random_inclusive(0, MAX_TYPES);
 
         var bubble = new ui.ImageView({
             superview: temp_stuff,
@@ -321,7 +343,11 @@ var Bubbles = {
 
         if (key !== null) {
             this.attach(bubble, key);
-        } else {
+        }
+        else if (d >= 0) {
+            this.depot[d] = bubble;
+        }
+        else {
             this.active.push(bubble);
         }
     },
@@ -332,6 +358,19 @@ var Bubbles = {
         this.list[index].data = null;
         this.list[index].removeFromSuperview();
         this.empties.push(index);
+    },
+    refill_depot: function (radius) {
+        for (var i = 0; i < this.depot.length; i++) {
+            if (this.depot[i] === null) {
+                var degrees = (360/this.depot.length) * i;
+                // console.log(degrees);
+                var r = degrees * Math.PI / 180;
+                var x = radius + (Math.cos(r) * radius * 0.9);
+                var y = radius + (Math.sin(r) * radius * 0.9);
+                // console.log(r,x,y);
+                this.create(x, y, null, 0, i);
+            }
+        }
     },
 };
 
