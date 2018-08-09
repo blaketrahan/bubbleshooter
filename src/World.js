@@ -45,7 +45,6 @@ exports = Class(ui.View, function (supr) {
         temp_stuff = this;
         this.halfwidth = this.style.width * 0.5;
         this.bubble_radius = 80;
-        this.ammo = 0;
         this.rotation = 0;
 
         var circle = new ui.ImageView({
@@ -57,7 +56,7 @@ exports = Class(ui.View, function (supr) {
             height: this.style.height,
         });
 
-        Bubbles.refill_depot(this.halfwidth);
+        Bubbles.refill_depot(this.halfwidth, 1);
 
         HexMap.calculate_hexmap();
 
@@ -69,19 +68,13 @@ exports = Class(ui.View, function (supr) {
                 find_and_add_to_quad(this.quadtree, HexMap.pts[key], pos, 0, this.quadtree.pos);
             }
         }
+
+        this.px = 0;
+        this.py = 0;
     };
 
     this.shoot = function () {
-        if (this.ammo === 0) { return; }
-
-        var next_x = this.halfwidth + (Math.cos(this.rotation) * this.halfwidth * 0.9);
-        var next_y = this.halfwidth + (Math.sin(this.rotation) * this.halfwidth * 0.9);
-
-        // var type = get_random_inclusive(0, MAX_TYPES);
-
-        Bubbles.create(next_x, next_y, null, this.ammo);
-
-        this.ammo = 0;
+        Bubbles.shoot();
     };
 
     this.update = function (vel, dt) {
@@ -90,23 +83,28 @@ exports = Class(ui.View, function (supr) {
 
         this.style.r += vel; // todo: add dt to this
 
-        /* TODO: THIS ----------- */
-        this.rotation = -this.style.r + 1.57079632679; // todo: this
-        // if (this.rotation < 0) {
-            // this.rotation += 6.28318530718;
-        // }
-        // console.log(this.rotation);
-        // check for ammo pickup
-        if (this.ammo === 0) {
+        this.rotation = -this.style.r + 1.57079632679;
+        this.px = this.halfwidth + (Math.cos(this.rotation) * this.halfwidth * 0.9);
+        this.py = this.halfwidth + (Math.sin(this.rotation) * this.halfwidth * 0.9);
+
+
+        Bubbles.refill_depot(this.halfwidth, dt);
+
+        // check for bubble pickup
+        if (Bubbles.carried === null) {
             for (var i = 0; i < Bubbles.depot.length; i++) {
-                var diff = this.rotation - (((360/Bubbles.depot.length) * i) * Math.PI / 180);
-                // console.log(diff);
-                if (Math.abs(diff) < 1) {
-                    this.ammo = Bubbles.depot[i].data.type;
+                if (Bubbles.depot[i] === null || Bubbles.depot[i].elapsed < 1) { continue; }
+                if (intersect_circle_circle(this.px, this.py, Bubbles.depot[i].style.x, Bubbles.depot[i].style.y,
+                    40, 40)) {
+                    Bubbles.pickup(i);
+                    break;
                 }
             }
         }
-        /* TODO: THIS ----------- */
+        else {
+            Bubbles.carried.style.x = this.px;
+            Bubbles.carried.style.y = this.py;
+        }
 
         var remaining_bubbles = [];
 
@@ -121,7 +119,6 @@ exports = Class(ui.View, function (supr) {
 
             el.elapsed += dt * 0.125;
             if (el.elapsed >= 1) {
-                console.log("OK");
                 el.elapsed = 1;
                 deactivate = true;
             }
@@ -258,6 +255,7 @@ exports = Class(ui.View, function (supr) {
 
                                 // add first element
                                 HexMap.pts[affected[i_a]].time2 = Score.time;
+                                if (HexMap.pts[affected[i_a]].ceiling) { continue; }
                                 orphans.push(affected[i_a]);
 
                                 find_orphans(orphans, affected[i_a], Score.time);
@@ -299,6 +297,7 @@ var Bubbles = {
     active: [], // bubbles not paired with hex (ie, moving)
     max_length: 700, // todo: replace this with max hexes + some for active
     depot: [null,null,null, null],
+    carried: null,
     attach: function (el, key) {
         var index = null;
 
@@ -331,6 +330,8 @@ var Bubbles = {
             height: 80,
             offsetX: -80 * 0.5,
             offsetY: -80 * 0.5,
+            anchorX: 40,
+            anchorY: 40,
         });
 
         bubble.data = {
@@ -359,19 +360,40 @@ var Bubbles = {
         this.list[index].removeFromSuperview();
         this.empties.push(index);
     },
-    refill_depot: function (radius) {
+    refill_depot: function (radius, dt) {
         for (var i = 0; i < this.depot.length; i++) {
+
             if (this.depot[i] === null) {
                 var degrees = (360/this.depot.length) * i;
-                // console.log(degrees);
+
                 var r = degrees * Math.PI / 180;
                 var x = radius + (Math.cos(r) * radius * 0.9);
                 var y = radius + (Math.sin(r) * radius * 0.9);
-                // console.log(r,x,y);
+
                 this.create(x, y, null, 0, i);
+                this.depot[i].elapsed = dt;
+            } else {
+                if (this.depot[i].elapsed < 1) {
+                    this.depot[i].elapsed += dt;
+                    this.depot[i].style.scale = this.depot[i].elapsed/1;
+                } else {
+                    this.depot[i].elapsed = 1;
+                    this.depot[i].style.scale = 1;
+                }
             }
         }
     },
+    pickup: function (d) {
+        this.carried = this.depot[d];
+        this.carried.elapsed = 0;
+        this.depot[d] = null;
+        return this.carried.data.type;
+    },
+    shoot: function () {
+        if (this.carried === null) return;
+        this.active.push(this.carried);
+        this.carried = null;
+    }
 };
 
 /* ---------------------------------------------------
@@ -490,7 +512,6 @@ var HexMap = {
                 this.pts[key].ceiling = (AbsQ < inner_cutoff + 1 && AbsR < inner_cutoff + 1 && AbsS < inner_cutoff + 1);
             }
         }
-        console.log(count);
     },
 };
 /* ---------------------------------------------------
