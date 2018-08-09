@@ -5,6 +5,7 @@ import ui.TextView;
 
 import src.Pilot as Pilot;
 import src.World as World;
+import src.Background as Background;
 
 var lang = 'en';
 
@@ -43,6 +44,7 @@ exports = Class(ui.View, function (supr) {
             wrap: false,
             color: '#FFFFFF',
             blockEvents: true,
+            zIndex: 20,
         });
 
         var dock_height = 50;
@@ -55,6 +57,25 @@ exports = Class(ui.View, function (supr) {
             x: this.style.width * 0.5,
             y: this.style.height - dock_height,
             blockEvents: true,
+            zIndex: 10,
+        });
+
+        /*
+            Background
+        */
+        // needs to be twice as big as longest side of gamescreen
+        this.background = new Background({
+            superview: this,
+            width: this.style.height,
+            height: this.style.height,
+            x: (-this.style.height/2) + (this.style.width * 0.5),
+            y: 0,
+            blockEvents: true,
+            anchorX: this.style.height/2,
+            anchorY: this.style.height/2,
+            zIndex: 1,
+            backgroundColor: "#000000",
+            opacity: 0.75,
         });
 
         /*
@@ -70,6 +91,7 @@ exports = Class(ui.View, function (supr) {
             blockEvents: true,
             anchorX: this.style.height,
             anchorY: this.style.height,
+            zIndex: 5,
         });
 
         /*

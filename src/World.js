@@ -28,6 +28,7 @@ var Score = {
     time: 0,
 };
 
+
 exports = Class(ui.View, function (supr) {
 
     this.init = function (opts) {
@@ -121,6 +122,7 @@ exports = Class(ui.View, function (supr) {
             if (el.elapsed >= 1) {
                 el.elapsed = 1;
                 deactivate = true;
+                Score.against++;
             }
 
             var v = el.elapsed;
@@ -250,12 +252,13 @@ exports = Class(ui.View, function (supr) {
                         if (like_neighbors.length > 2) {
                             remove_cluster(like_neighbors);
 
+                            var found_ceiling = false;
+
                             for (var i_a = 0; i_a < affected.length; i_a++) {
                                 if (HexMap.pts[affected[i_a]].time2 === Score.time) { continue; }
 
                                 // add first element
                                 HexMap.pts[affected[i_a]].time2 = Score.time;
-                                if (HexMap.pts[affected[i_a]].ceiling) { continue; }
                                 orphans.push(affected[i_a]);
 
                                 find_orphans(orphans, affected[i_a], Score.time);
