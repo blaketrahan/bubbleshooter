@@ -10,11 +10,11 @@ var debugcolor = new Image({url: "resources/images/debug.png"});
 
 var img_bubbles =
 [
-    new Image({url: "resources/images/ball_blue-flat.png"}),
-    new Image({url: "resources/images/ball_green-flat.png"}),
-    new Image({url: "resources/images/ball_purple-flat.png"}),
-    new Image({url: "resources/images/ball_red-flat.png"}),
-    new Image({url: "resources/images/ball_yellow-flat.png"}),
+    new Image({url: "resources/images/ball_blue.png"}),
+    new Image({url: "resources/images/ball_green.png"}),
+    new Image({url: "resources/images/ball_purple.png"}),
+    new Image({url: "resources/images/ball_red.png"}),
+    new Image({url: "resources/images/ball_yellow.png"}),
 ];
 
 // todo: remove this
@@ -43,7 +43,7 @@ exports = Class(ui.View, function (supr) {
         temp_stuff = this;
         this.halfwidth = this.style.width * 0.5;
         this.bubble_radius = 80;
-        this.active_bubbles = [];
+
         this.prev_r = 0;
 
         var circle = new ui.ImageView({
@@ -74,28 +74,7 @@ exports = Class(ui.View, function (supr) {
 
         var type = get_random_inclusive(0,4);
 
-        var curr_bubble = new ui.ImageView({
-            superview: this,
-            image: img_bubbles[type],
-            width: this.bubble_radius,
-            height: this.bubble_radius,
-            offsetX: -this.bubble_radius * 0.5,
-            offsetY: -this.bubble_radius * 0.5,
-            x: next_x,
-            y: next_y,
-        });
-
-        curr_bubble.data = {
-            hex_key: null,
-            type: type,
-        };
-
-        curr_bubble.prev_x = next_x;
-        curr_bubble.prev_y = next_y;
-
-        curr_bubble.elapsed = 0;
-
-        this.active_bubbles.push(curr_bubble);
+        Bubbles.create(next_x, next_y, null, type);
 
         this.prev_r = r;
     };
@@ -106,23 +85,26 @@ exports = Class(ui.View, function (supr) {
 
         this.style.r += vel; // todo: add dt to this
 
+        // check for ammo pickup
 
         var remaining_bubbles = [];
 
         // lerp each bubble to center
-        for (var i = 0; i < this.active_bubbles.length; i++) {
+        for (var i = 0; i < Bubbles.active.length; i++) {
             var deactivate = false;
 
-            var el = this.active_bubbles[i];
+            var el = Bubbles.active[i];
 
             el.prev_x = el.style.x;
             el.prev_y = el.style.y;
 
             el.elapsed += dt * 0.125;
             if (el.elapsed >= 1) {
+                console.log("OK");
                 el.elapsed = 1;
                 deactivate = true;
             }
+
             var v = el.elapsed;
             el.style.x = (this.halfwidth * v) + (el.style.x * (1 - v));
             el.style.y = (this.halfwidth * v) + (el.style.y * (1 - v));
@@ -180,13 +162,8 @@ exports = Class(ui.View, function (supr) {
                     if (closest_hex !== null) {
                         el.style.x = HexMap.pts[closest_hex].x;
                         el.style.y = HexMap.pts[closest_hex].y;
-                        // pair up
-                        el.data.hex_key = closest_hex;
-                        HexMap.pts[closest_hex].data = {
-                            bubble_index: Bubbles.list.length,
-                            type: el.data.type,
-                        };
-                        Bubbles.list.push(el);
+
+                        Bubbles.attach(el, closest_hex);
 
                         function find_cluster (list, type, key, affected, time) {
                             var neighbors = HexMap.get_neighbors(key);
@@ -275,13 +252,13 @@ exports = Class(ui.View, function (supr) {
                 }
             }
             else {
-                this.active_bubbles[i].removeFromSuperview();
+                Bubbles.active[i].removeFromSuperview();
             }
             if (!deactivate) {
-                remaining_bubbles.push(this.active_bubbles[i]);
+                remaining_bubbles.push(Bubbles.active[i]);
             }
         }
-        this.active_bubbles = remaining_bubbles;
+        Bubbles.active = remaining_bubbles;
     };
 });
 
@@ -296,12 +273,33 @@ function get_random_inclusive (min, max)
     BUBBLES
 */
 var Bubbles = {
-    list: [],
-    empties: [],
-    max_length: 100, // todo: replace this with max hexes + some for active
-    create: function (x, y, key) {
+    list: [], // bubbles
+    empties: [], // empty indices in bubble list
+    active: [], // bubbles not paired with hex (ie, moving)
+    max_length: 700, // todo: replace this with max hexes + some for active
+    attach: function (el, key) {
+        var index = null;
 
-        var type = get_random_inclusive(0,4);
+        if (this.list.length >= this.max_length)
+        {
+            index = this.get_an_index();
+            this.list[index] = el;
+        } else {
+            index = this.list.length;
+            this.list.push(el);
+        }
+
+        el.data.hex_key = key;
+
+        HexMap.pts[key].data = {
+            bubble_index: index,
+            type: el.data.type,
+        };
+    },
+    create: function (x, y, key = null, t = 0) {
+
+        var type = t || get_random_inclusive(0,4);
+
         var bubble = new ui.ImageView({
             superview: temp_stuff,
             image: img_bubbles[type],
@@ -313,25 +311,19 @@ var Bubbles = {
             offsetY: -80 * 0.5,
         });
 
-        var index = null;
-        if (this.list.length >= this.max_length)
-        {
-            index = this.get_an_index();
-            this.list[index] = bubble;
-        } else {
-            index = this.list.length;
-            this.list.push(bubble);
-        }
+        bubble.data = {
+            hex_key: null,
+            type: type,
+        };
+        bubble.elapsed = 0;
+        bubble.prev_x = x;
+        bubble.prev_y = y;
 
-        // pair bubble and hex
-        this.list[index].data = {
-            hex_key: key,
-            type: type,
-        };
-        HexMap.pts[key].data = {
-            bubble_index: index,
-            type: type,
-        };
+        if (key !== null) {
+            this.attach(bubble, key);
+        } else {
+            this.active.push(bubble);
+        }
     },
     get_an_index: function () {
         return this.empties.pop(); // todo: TEST THIS!!!!
@@ -446,9 +438,10 @@ var HexMap = {
                 Bubbles.create(htp.x, htp.y, key);
             }
         }
-
+        var count = 0;
         for (var key in this.pts) {
             if (this.pts.hasOwnProperty(key)) {
+                count++;
                 if (this.pts[key].data === null) { continue; }
 
                 var AbsQ = Math.abs(this.pts[key].q);
@@ -458,6 +451,7 @@ var HexMap = {
                 this.pts[key].ceiling = (AbsQ < inner_cutoff + 1 && AbsR < inner_cutoff + 1 && AbsS < inner_cutoff + 1);
             }
         }
+        console.log(count);
     },
 };
 /* ---------------------------------------------------
