@@ -14,10 +14,10 @@ exports = Class(ui.View, function (supr) {
         opts = merge(opts, {
             x: 0,
             y: 0,
-            width: img_pilot.getWidth(),
-            height: img_pilot.getHeight(),
-            offsetX: -img_pilot.getWidth() * 0.5,
-            offsetY: -img_pilot.getHeight(),
+            width: 120,
+            height: 120,
+            offsetX: -120 * 0.5,
+            offsetY: -120,
         });
 
         supr(this, 'init', [opts]);
@@ -32,9 +32,8 @@ exports = Class(ui.View, function (supr) {
             image: img_pilot,
             x: 0,
             y: 0,
-            width: img_pilot.getWidth(),
-            height: img_pilot.getHeight(),
-            opacity: 0.25,
+            width: 120,
+            height: 120,
         });
     };
 });

@@ -1,52 +1,45 @@
-/*
-    todo:
-        pause on rotation (and dont resize screen)
-            or just resize everything
-        sound
-        game end
-        back to main menu
-        pilot tilt animation
-        cap bullets that can exist
-        cap bubbles that can exist
-        comments
-        scale game better!! constant game world size
-        use strict?
-        check for todos in code
-        if you hit bubbles, you crash
-        remove old files
-        clean up styles
-        rewrite ugly code
-        remove unused code
-        replace code with engine versions
-        put things into classes, clean up
-*/
-
 import device;
 import ui.StackView as StackView;
 
 import src.TitleScreen as TitleScreen;
 import src.GameScreen as GameScreen;
 
-var boundsWidth = 576;
-var boundsHeight = 1024;
-var baseWidth = boundsWidth;
-var baseHeight = device.screen.height * (boundsWidth / device.screen.width);
-var scale = device.screen.width / baseWidth;
-var rightBoundary = baseWidth;
-var leftBoundary = 0;
-
 exports = Class(GC.Application, function () {
 
     this.initUI = function () {
 
-        this.view.style.backgroundColor = '#1A99FB';
+        var boundsWidth = 576;
+        var boundsHeight = 1024;
+        var baseWidth = boundsWidth;
+        var baseHeight = device.screen.height * (boundsWidth / device.screen.width);
+        var scale = device.screen.width / baseWidth;
+        var rightBoundary = baseWidth;
+        var leftBoundary = 0;
+
+        // todo: just a quick fix for short and wide screens
+        if (baseWidth / baseHeight > 0.6) {
+            boundsWidth = 576;
+            boundsHeight = 1024;
+            baseWidth = device.screen.width * (boundsHeight / device.screen.height);
+            baseHeight = boundsHeight;
+            scale = device.screen.height / baseHeight;
+            rightBoundary = baseWidth;
+            leftBoundary = 0;
+        }
+
+        this.view.style.backgroundColor = '#0A111F';
         this.view.style.scale = scale;
 
-        var titlescreen = new TitleScreen({});
+        var titlescreen = new TitleScreen({
+            width: baseWidth,
+            height: baseHeight,
+            clip: true,
+        });
 
         var gamescreen = new GameScreen({
             width: baseWidth,
             height: baseHeight,
+            clip: true,
         });
 
         var rootView = new StackView({
@@ -58,15 +51,15 @@ exports = Class(GC.Application, function () {
             clip: true,
         });
 
-        rootView.push(titlescreen);
+        rootView.push(titlescreen, true);
 
         titlescreen.on('titlescreen:start', function () {
-            rootView.push(gamescreen);
+            rootView.push(gamescreen, true);
             gamescreen.emit('app:start');
         });
 
         gamescreen.on('gamescreen:end', function () {
-            rootView.pop();
+            rootView.pop(true);
         });
     };
 

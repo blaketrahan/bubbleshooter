@@ -5,7 +5,6 @@ import ui.TextView;
 
 import src.Pilot as Pilot;
 import src.World as World;
-import src.Background as Background;
 
 var lang = 'en';
 
@@ -30,16 +29,16 @@ exports = Class(ui.View, function (supr) {
         this.game_state = true;
 
         /*
-            Screen Messages
+            Ready pilot, go!
         */
         this.messages = new ui.TextView({
             superview: this,
             x: 0,
-            y: 15,
-            width: 320,
-            height: 50,
+            y: 0,
+            width: this.style.width,
+            height: this.style.height,
             autoSize: false,
-            size: 38,
+            size: 42,
             verticalAlign: 'middle',
             horizontalAlign: 'center',
             wrap: false,
@@ -48,6 +47,43 @@ exports = Class(ui.View, function (supr) {
             zIndex: 20,
         });
 
+        /*
+            Score
+        */
+        this.scoreboard = new ui.TextView({
+            superview: this,
+            x: 0,
+            y: this.style.height - 60,
+            width: 60,
+            height: 60,
+            autoSize: false,
+            size: 42,
+            verticalAlign: 'middle',
+            horizontalAlign: 'center',
+            wrap: false,
+            color: '#FFFFFF',
+            blockEvents: true,
+            zIndex: 20,
+        });
+
+        /*
+            Timer
+        */
+        this.timeboard = new ui.TextView({
+            superview: this,
+            x: this.style.width - 60,
+            y: this.style.height - 60,
+            width: 60,
+            height: 60,
+            autoSize: false,
+            size: 42,
+            verticalAlign: 'middle',
+            horizontalAlign: 'center',
+            wrap: false,
+            color: '#FFFFFF',
+            blockEvents: true,
+            zIndex: 20,
+        });
         var dock_height = 50;
 
         /*
@@ -59,24 +95,6 @@ exports = Class(ui.View, function (supr) {
             y: this.style.height - dock_height,
             blockEvents: true,
             zIndex: 10,
-        });
-
-        /*
-            Background
-        */
-        // needs to be twice as big as longest side of gamescreen
-        this.background = new Background({
-            superview: this,
-            width: this.style.height,
-            height: this.style.height,
-            x: (-this.style.height/2) + (this.style.width * 0.5),
-            y: 0,
-            blockEvents: true,
-            anchorX: this.style.height/2,
-            anchorY: this.style.height/2,
-            zIndex: 1,
-            backgroundColor: "#000000",
-            opacity: 0.75,
         });
 
         /*
@@ -123,11 +141,15 @@ exports = Class(ui.View, function (supr) {
 function start_game_flow () {
     var that = this;
 
-    animate(that.messages).wait(500)
+    animate(that.messages).wait(1000)
         .then(function () {
             that.messages.setText(text.READY);
-        }).wait(500).then(function () {
+            that.scoreboard.setText(0);
+            that.timeboard.setText(60);
+        }).wait(1000).then(function () {
             that.messages.setText(text.GO);
+        }).wait(1000).then(function () {
+            that.messages.setText();
             that.game_state = true;
             play_game.call(that);
         });
@@ -145,12 +167,25 @@ function play_game () {
 
             var vel = local_x * 0.05; // get a reasonable value
 
+            /*
+                This is where the entire game is updated
+            */
             this.game_state = this.world.update(vel, dt);
 
+            /*
+                Update score and time
+            */
+            that.scoreboard.setText(Math.floor(this.world.score.total - this.world.score.against));
+            var time_left = Math.floor(60 - this.world.score.time);
+            that.timeboard.setText(time_left < 0 ? 0 : time_left);
+
+            /*
+                Check game state
+            */
             if (!this.game_state) {
                 animate(that.messages).wait(500).then(function(){
-                    that.world.reset();
                     that.emit('gamescreen:end');
+                    that.world.reset();
                 });
             }
         }
