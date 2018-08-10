@@ -2,9 +2,15 @@ import animate;
 import ui.View;
 import ui.ImageView;
 import ui.resource.Image as Image;
+import math.geom.Point as Point;
 
 var img_circle = new Image({url: "resources/images/circle.png"});
 var debugcolor = new Image({url: "resources/images/debug.png"});
+
+var img_attack_fire = new Image({url: "resources/images/fire.png"});
+var img_attack_bar = new Image({url: "resources/images/bar.png"});
+
+var WORLD_SIZE = 1024 * 2;
 
 "use strict";
 
@@ -28,6 +34,234 @@ var Score = {
     time: 0,
 };
 
+function Attack (init_func, fire_func, move_func, collision_func) {
+    var obj = {
+        el: [],
+        curr: 0,
+        active: true,
+        elapsed: 0,
+        cooldown: 5,
+        direciton: 0,
+        target: 0,
+        fire: fire_func,
+        move: move_func,
+        collision: collision_func,
+    };
+    bind(obj, init_func)();
+    return obj;
+}
+
+var Enemy = {
+    attack: [],
+    n: 0, // which attack to use next
+    origin: 0,
+    elapsed: 0,
+    init: function (x, y) {
+        this.origin = new Point(x, y);
+        this.elapsed = 0;
+
+        var fireball = Attack(
+            function() {
+                /*
+                    Init and return render elements
+                */
+                this.el = [];
+                for (var i = 0; i < 4; i++) {
+                    var obj = new ui.ImageView({
+                        superview: temp_stuff,
+                        image: img_attack_fire,
+                        x: x,
+                        y: y,
+                        width: 70,
+                        height: 70,
+                        offsetX: -70 * 0.5,
+                        offsetY: -70 * 0.5,
+                        anchorX: 35,
+                        anchorY: 35,
+                        zIndex: 50,
+                    });
+                    obj.target = new Point(x, y);
+                    obj.elapsed = 0;
+                    obj.active = false;
+                    obj.origin = new Point(x, y);
+                    this.el.push(obj);
+                }
+                this.cooldown = 3 + (0.5 * this.el.length);
+            },
+            function(dt, dir, pos, origin) {
+                /*
+                    On fire
+                */
+                this.elapsed += dt;
+                if (this.elapsed >= 0.5) {
+
+                    if (this.curr === 0) {
+                        this.dir = (dir < 0 ? -0.1 : 0.1);
+                        // this.target = (new Point(pos))
+                    }
+
+                    this.elapsed = 0;
+
+                    var el = this.el[this.curr];
+                    el.active = true;
+                    el.elapsed = 0;
+                    el.target = new Point(pos);
+                    el.target.subtract(origin);
+                    el.target.rotate((-this.dir * 4) + this.dir * this.curr);
+                    el.target.scale(2);
+                    el.target.translate(origin);
+                    el.origin = new Point(origin);
+
+                    this.curr++;
+
+                    if (this.curr >= this.el.length) {
+                        this.active = false;
+                        this.curr = 0;
+                    }
+                }
+            },
+            function(dt) {
+                /*
+                    Update tick
+                */
+                for (var i = 0; i < this.el.length; i++) {
+                    var el = this.el[i];
+                    if (!el.active) { continue; }
+
+                    el.elapsed += dt/2;
+                    var v = el.elapsed;
+
+                    if (v > 1) {
+                        el.elapsed = 0;
+                        el.active = false;
+                    }
+                    el.style.x = (el.target.x * v) + (el.origin.x * (1 - v));
+                    el.style.y = (el.target.y * v) + (el.origin.y * (1 - v));
+                }
+            },
+            function(pos, radius) {
+                /*
+                    Collision
+                */
+                for (var i = 0; i < this.el.length; i++) {
+                    if (minkowski_circle_square(pos.x, pos.y, radius, this.el[i].style.x, this.el[i].style.y, this.el[i].style.width)) {
+                        // todo: insert end game
+                        this.el[i].style.opacity = 0.5;
+                        break;
+                    }
+                }
+            },
+        );
+
+        var whitebar = Attack(
+            function() {
+                /*
+                    Init and return render elements
+                */
+                this.el = [];
+                for (var i = 0; i < 6; i++) {
+                    var obj = new ui.ImageView({
+                        superview: temp_stuff,
+                        image: img_attack_bar,
+                        x: x,
+                        y: y,
+                        width: 300,
+                        height: 60,
+                        offsetX: -300 * 0.5,
+                        offsetY: -60 * 0.5,
+                        anchorX: 150,
+                        anchorY: 30,
+                        zIndex: 50,
+                    });
+                    obj.target = new Point(x, y);
+                    obj.elapsed = 0;
+                    obj.active = false;
+                    obj.origin = new Point(x, y);
+                    this.el.push(obj);
+                }
+                this.cooldown = 4;//this.cooldown * 2;
+            },
+            function(dt, dir, pos, origin) {
+                /*
+                    On fire
+                */
+                this.dir = 1;
+                this.target = new Point(WORLD_SIZE, WORLD_SIZE);
+
+                this.elapsed = 0;
+                for (var i = 0; i < this.el.length; i++) {
+                    var rotation = (Math.PI * 2) * ((i+1)/this.el.length);
+                    var el = this.el[i];
+                    el.active = true;
+                    el.elapsed = 0;
+                    el.target = new Point(this.target);
+                    el.target.subtract(origin);
+                    el.target.rotate(rotation);
+                    el.target.translate(origin);
+                    el.origin = new Point(origin);
+                    el.style.r = rotation - 0.7853981634;
+                }
+
+                this.active = false;
+            },
+            function(dt) {
+                /*
+                    Update tick
+                */
+                for (var i = 0; i < this.el.length; i++) {
+                    var el = this.el[i];
+                    if (!el.active) { continue; }
+
+                    el.elapsed += dt/4;
+                    var v = el.elapsed;
+
+                    if (v > 1) {
+                        el.elapsed = 0;
+                        el.active = false;
+                    }
+                    el.style.x = (el.target.x * v) + (el.origin.x * (1 - v));
+                    el.style.y = (el.target.y * v) + (el.origin.y * (1 - v));
+                }
+            },
+            function(pos, radius) {
+                /*
+                    Collision
+                */
+                for (var i = 0; i < this.el.length; i++) {
+                    if (this.el[i].elapsed < 0.58 || this.el[i].elapsed > 0.65) { continue; }
+                    if (minkowski_circle_square(pos.x, pos.y, radius, this.el[i].style.x, this.el[i].style.y, this.el[i].style.width)) {
+                        // todo: insert end game
+                        this.el[i].style.opacity = 0.5;
+                        break;
+                    }
+                }
+            },
+        );
+
+        this.attack.push(fireball);
+        this.attack.push(whitebar);
+    },
+    update: function (dt, dir, pos, radius) {
+        /*
+            Update all attacks
+        */
+        this.elapsed += dt;
+        if (this.elapsed >= this.attack[this.n].cooldown) {
+            this.elapsed = 0;
+            this.n = this.n + 1 >= this.attack.length ? 0 : this.n + 1;
+            this.attack[this.n].active = true;
+        }
+
+        if (this.attack[this.n].active) {
+            this.attack[this.n].fire(dt, dir, pos, this.origin);
+        }
+
+        for (var i = 0; i < this.attack.length; i++) {
+            this.attack[i].move(dt);
+            this.attack[i].collision(pos, radius);
+        }
+    }
+};
 
 exports = Class(ui.View, function (supr) {
 
@@ -47,6 +281,8 @@ exports = Class(ui.View, function (supr) {
         this.halfwidth = this.style.width * 0.5;
         this.bubble_radius = 80;
         this.rotation = 0;
+        this.pos = new Point(0,0);
+        this.player_radius = 109/2;
 
         var circle = new ui.ImageView({
             superview: this,
@@ -58,6 +294,7 @@ exports = Class(ui.View, function (supr) {
         });
 
         Bubbles.refill_depot(this.halfwidth, 1);
+        Enemy.init(this.halfwidth, this.halfwidth);
 
         HexMap.calculate_hexmap();
 
@@ -69,9 +306,6 @@ exports = Class(ui.View, function (supr) {
                 find_and_add_to_quad(this.quadtree, HexMap.pts[key], pos, 0, this.quadtree.pos);
             }
         }
-
-        this.px = 0;
-        this.py = 0;
     };
 
     this.shoot = function () {
@@ -82,20 +316,21 @@ exports = Class(ui.View, function (supr) {
         // todo: cap radians
         Score.time += dt;
 
-        this.style.r += vel; // todo: add dt to this
+        this.style.r += vel * 0.9; // todo: add dt to this
 
         this.rotation = -this.style.r + 1.57079632679;
-        this.px = this.halfwidth + (Math.cos(this.rotation) * this.halfwidth * 0.9);
-        this.py = this.halfwidth + (Math.sin(this.rotation) * this.halfwidth * 0.9);
-
+        this.pos.x = this.halfwidth + (Math.cos(this.rotation) * this.halfwidth * 0.9);
+        this.pos.y = this.halfwidth + (Math.sin(this.rotation) * this.halfwidth * 0.9);
 
         Bubbles.refill_depot(this.halfwidth, dt);
+
+        Enemy.update(dt, vel, this.pos, this.player_radius);
 
         // check for bubble pickup
         if (Bubbles.carried === null) {
             for (var i = 0; i < Bubbles.depot.length; i++) {
                 if (Bubbles.depot[i] === null || Bubbles.depot[i].elapsed < 1) { continue; }
-                if (intersect_circle_circle(this.px, this.py, Bubbles.depot[i].style.x, Bubbles.depot[i].style.y,
+                if (intersect_circle_circle(this.pos.x, this.pos.y, Bubbles.depot[i].style.x, Bubbles.depot[i].style.y,
                     40, 40)) {
                     Bubbles.pickup(i);
                     break;
@@ -103,8 +338,8 @@ exports = Class(ui.View, function (supr) {
             }
         }
         else {
-            Bubbles.carried.style.x = this.px;
-            Bubbles.carried.style.y = this.py;
+            Bubbles.carried.style.x = this.pos.x;
+            Bubbles.carried.style.y = this.pos.y;
         }
 
         var remaining_bubbles = [];
@@ -114,9 +349,6 @@ exports = Class(ui.View, function (supr) {
             var deactivate = false;
 
             var el = Bubbles.active[i];
-
-            el.prev_x = el.style.x;
-            el.prev_y = el.style.y;
 
             el.elapsed += dt * 0.125;
             if (el.elapsed >= 1) {
@@ -342,8 +574,6 @@ var Bubbles = {
             type: type,
         };
         bubble.elapsed = 0;
-        bubble.prev_x = x;
-        bubble.prev_y = y;
 
         if (key !== null) {
             this.attach(bubble, key);
@@ -719,7 +949,6 @@ function get_quads_from_circle (tree, pos, found_quad, quad_pos, radius, quadlis
     }
 
     for (var i = 0; i < 4; i++) {
-        // console.log(i);
         if (minkowski_circle_square(pos[0], pos[1], radius/2, quads[i].pos[0], quads[i].pos[1], quads[i].width)) {
             if (quads[i].has_children) {
                 get_quads_from_circle(tree, pos, quads[i], quads[i].pos, radius, quadlist);
