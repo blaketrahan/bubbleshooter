@@ -27,6 +27,7 @@ exports = Class(ui.View, function (supr) {
 
         this.midpoint = this.style.width * 0.5;
         this.maxwidth = this.style.width;
+        this.game_state = true;
 
         /*
             Screen Messages
@@ -127,7 +128,7 @@ function start_game_flow () {
             that.messages.setText(text.READY);
         }).wait(500).then(function () {
             that.messages.setText(text.GO);
-            game_on = true;
+            that.game_state = true;
             play_game.call(that);
         });
 }
@@ -137,12 +138,22 @@ function play_game () {
 
     that.tick = function (ms) {
         var dt = ms/1000;
-        // get input on -0.5 to 0.5 scale
-        var local_x = (that.px - that.midpoint) / that.maxwidth;
+        if (this.game_state)
+        {
+            // get input on -0.5 to 0.5 scale
+            var local_x = (that.px - that.midpoint) / that.maxwidth;
 
-        var vel = local_x * 0.05;
+            var vel = local_x * 0.05; // get a reasonable value
 
-        this.world.update(vel, dt);
+            this.game_state = this.world.update(vel, dt);
+
+            if (!this.game_state) {
+                animate(that.messages).wait(500).then(function(){
+                    that.world.reset();
+                    that.emit('gamescreen:end');
+                });
+            }
+        }
     };
 }
 

@@ -1,6 +1,7 @@
 import animate;
 import ui.View;
 import ui.ImageView;
+import ui.ViewPool as ViewPool;
 import ui.resource.Image as Image;
 import math.geom.Point as Point;
 import math.util as util;
@@ -13,6 +14,7 @@ var img_attack_fire = new Image({url: "resources/images/fire.png"});
 var img_attack_bar = new Image({url: "resources/images/bar.png"});
 
 var WORLD_SIZE = 1024 * 2;
+var MAX_BUBBLES = 700;
 
 "use strict";
 
@@ -27,9 +29,6 @@ var img_bubbles =
     new Image({url: "resources/images/ball_yellow.png"}),
 ];
 
-// todo: remove this
-var temp_stuff;
-
 var Score = {
     total: 0,
     against: 0,
@@ -38,6 +37,7 @@ var Score = {
 
 function Attack (init_func, fire_func, move_func, collision_func) {
     var obj = {
+        parent: null,
         el: [],
         curr: 0,
         active: true,
@@ -54,13 +54,25 @@ function Attack (init_func, fire_func, move_func, collision_func) {
 }
 
 var Enemy = {
+    parent: null,
     attack: [],
     n: 0, // which attack to use next
     origin: 0,
     elapsed: 0,
-    init: function (x, y) {
+    reset: function () {
+        this.elapsed = 0;
+        this.n = 0;
+        for (var i = 0; i < this.attack.length; i++) {
+            for (var k = 0; k < this.attack[i].el.length; k++) {
+                this.parent.imageViewPool.releaseView(this.attack[i].el[k]);
+            }
+        }
+        this.attack = [];
+    },
+    init: function (x, y, parent) {
         this.origin = new Point(x, y);
         this.elapsed = 0;
+        this.parent = parent;
 
         var fireball = Attack(
             function() {
@@ -69,8 +81,9 @@ var Enemy = {
                 */
                 this.el = [];
                 for (var i = 0; i < 4; i++) {
-                    var obj = new ui.ImageView({
-                        superview: temp_stuff,
+                    var obj = parent.imageViewPool.obtainView();
+                    obj.updateOpts({
+                        superview: parent,
                         image: img_attack_fire,
                         x: x,
                         y: y,
@@ -81,6 +94,9 @@ var Enemy = {
                         anchorX: 35,
                         anchorY: 35,
                         zIndex: 50,
+                        opacity: 1,
+                        visible: false,
+                        scale: 1,
                     });
                     obj.target = new Point(x, y);
                     obj.elapsed = 0;
@@ -89,6 +105,7 @@ var Enemy = {
                     this.el.push(obj);
                 }
                 this.cooldown = 3 + (0.5 * this.el.length);
+                this.parent = parent;
             },
             function(dt, dir, pos, origin) {
                 /*
@@ -113,6 +130,7 @@ var Enemy = {
                     el.target.scale(2);
                     el.target.translate(origin);
                     el.origin = new Point(origin);
+                    el.style.visible = true;
 
                     this.curr++;
 
@@ -136,6 +154,7 @@ var Enemy = {
                     if (v > 1) {
                         el.elapsed = 0;
                         el.active = false;
+                        el.style.visible = false;
                     }
                     el.style.x = (el.target.x * v) + (el.origin.x * (1 - v));
                     el.style.y = (el.target.y * v) + (el.origin.y * (1 - v));
@@ -147,9 +166,7 @@ var Enemy = {
                 */
                 for (var i = 0; i < this.el.length; i++) {
                     if (minkowski_circle_square(pos.x, pos.y, radius, this.el[i].style.x, this.el[i].style.y, this.el[i].style.width)) {
-                        // todo: insert end game
-                        this.el[i].style.opacity = 0.5;
-                        break;
+                        return true;
                     }
                 }
             },
@@ -162,8 +179,9 @@ var Enemy = {
                 */
                 this.el = [];
                 for (var i = 0; i < 6; i++) {
-                    var obj = new ui.ImageView({
-                        superview: temp_stuff,
+                    var obj = parent.imageViewPool.obtainView();
+                    obj.updateOpts({
+                        superview: parent,
                         image: img_attack_bar,
                         x: x,
                         y: y,
@@ -174,6 +192,9 @@ var Enemy = {
                         anchorX: 150,
                         anchorY: 30,
                         zIndex: 50,
+                        opacity: 1,
+                        visible: false,
+                        scale: 1,
                     });
                     obj.target = new Point(x, y);
                     obj.elapsed = 0;
@@ -182,6 +203,7 @@ var Enemy = {
                     this.el.push(obj);
                 }
                 this.cooldown = 4;//this.cooldown * 2;
+                this.parent = parent;
             },
             function(dt, dir, pos, origin) {
                 /*
@@ -202,6 +224,8 @@ var Enemy = {
                     el.target.translate(origin);
                     el.origin = new Point(origin);
                     el.style.r = rotation - 0.7853981634;
+                    el.style.visible = true;
+                    el.style.scale = 0;
                 }
 
                 this.active = false;
@@ -216,10 +240,12 @@ var Enemy = {
 
                     el.elapsed += dt/4;
                     var v = el.elapsed;
+                    el.style.scale = v * 2.1;
 
                     if (v > 1) {
                         el.elapsed = 0;
                         el.active = false;
+                        el.style.visbile = false;
                     }
                     el.style.x = (el.target.x * v) + (el.origin.x * (1 - v));
                     el.style.y = (el.target.y * v) + (el.origin.y * (1 - v));
@@ -232,9 +258,7 @@ var Enemy = {
                 for (var i = 0; i < this.el.length; i++) {
                     if (this.el[i].elapsed < 0.58 || this.el[i].elapsed > 0.65) { continue; }
                     if (minkowski_circle_square(pos.x, pos.y, radius, this.el[i].style.x, this.el[i].style.y, this.el[i].style.width)) {
-                        // todo: insert end game
-                        this.el[i].style.opacity = 0.5;
-                        break;
+                        return true;
                     }
                 }
             },
@@ -260,8 +284,12 @@ var Enemy = {
 
         for (var i = 0; i < this.attack.length; i++) {
             this.attack[i].move(dt);
-            this.attack[i].collision(pos, radius);
+            if (this.attack[i].collision(pos, radius)) {
+                return true;
+            }
         }
+
+        return false; // no collision
     }
 };
 
@@ -275,49 +303,71 @@ exports = Class(ui.View, function (supr) {
 
         supr(this, 'init', [opts]);
 
+        // initialize a ViewPool for ImageViews
+        this.imageViewPool = new ViewPool({
+            ctor: ui.ImageView,
+            initCount: MAX_BUBBLES,
+            initOpts: {
+                parent: this,
+                width: 80,
+                height: 80,
+                offsetX: -80 * 0.5,
+                offsetY: -80 * 0.5,
+                anchorX: 40,
+                anchorY: 40,
+            }
+        });
+
+        this.quadtree = null;
+        this.circle = null;
+        this.UI_screen = null;
+
         this.build();
     };
 
     this.build = function () {
-        temp_stuff = this;
+
         this.halfwidth = this.style.width * 0.5;
         this.bubble_radius = 80;
         this.rotation = 0;
         this.pos = new Point(0,0);
         this.player_radius = 109/2;
+        this.style.r = 0;
 
-        var circle = new ui.ImageView({
-            superview: this,
-            image: img_circle,
-            x: 0,
-            y: 0,
-            width: this.style.width,
-            height: this.style.height,
-        });
+        if (this.circle === null) {
+            this.circle = new ui.ImageView({
+                superview: this,
+                image: img_circle,
+                x: 0,
+                y: 0,
+                width: this.style.width,
+                height: this.style.height,
+                opacity: 1,
+                zIndex: 1,
+            });
+        }
 
-        var screen_width = this.getParents()[0].maxwidth;
+        if (this.UI_screen === null) {
+            var screen_width = this.getParents()[0].maxwidth;
+            this.UI_screen = new ui.View({
+                superview: this,
+                x: this.halfwidth,
+                y: this.halfwidth,
+                width: screen_width,
+                height: this.halfwidth,
+                offsetX: -screen_width * 0.5,
+                offsetY: 0,
+                anchorX: screen_width/2,
+                anchorY: 0,
+                zIndex: 100,
+                opacity: 1,
+            });
+        }
 
-        this.UI_screen = new ui.View({
-            superview: temp_stuff,
-            x: this.halfwidth,
-            y: this.halfwidth,
-            width: screen_width,
-            height: this.halfwidth,
-            offsetX: -screen_width * 0.5,
-            offsetY: 0,
-            anchorX: screen_width/2,
-            anchorY: 0,
-            zIndex: 100,
-        });
-
-        Bubbles.init();
+        Bubbles.init(this);
         Bubbles.refill_depot(this.halfwidth, 1);
-        Enemy.init(this.halfwidth, this.halfwidth);
-
-        console.log(this.style.r, Bubbles.depot[0].rotation
-            , Bubbles.depot[1].rotation
-            , Bubbles.depot[2].rotation);
-
+        Enemy.init(this.halfwidth, this.halfwidth, this);
+        HexMap.init(this);
         HexMap.calculate_hexmap();
 
         this.quadtree = init_quads(this.halfwidth * 2, this.halfwidth, this.halfwidth);
@@ -328,6 +378,16 @@ exports = Class(ui.View, function (supr) {
                 find_and_add_to_quad(this.quadtree, HexMap.pts[key], pos, 0, this.quadtree.pos);
             }
         }
+    };
+
+    this.reset = function () {
+
+        Bubbles.reset();
+        Enemy.reset();
+        HexMap.reset();
+        this.imageViewPool.releaseAllViews();
+
+        this.build();
     };
 
     this.shoot = function () {
@@ -357,7 +417,8 @@ exports = Class(ui.View, function (supr) {
             this.UI_screen.style.height,
             this.UI_screen.style.offsetX);
 
-        Enemy.update(dt, vel, this.pos, this.player_radius);
+        // note: switching bool here so that player_alive = true
+        var player_alive = !Enemy.update(dt, vel, this.pos, this.player_radius);
 
         // check for bubble pickup
         if (Bubbles.carried === null) {
@@ -550,6 +611,7 @@ exports = Class(ui.View, function (supr) {
             }
         }
         Bubbles.active = remaining_bubbles;
+        return player_alive;
     };
 });
 
@@ -564,19 +626,57 @@ function get_random_inclusive (min, max)
     BUBBLES
 */
 var Bubbles = {
+    parent: null,
     list: [], // bubbles
     empties: [], // empty indices in bubble list
     active: [], // bubbles not paired with hex (ie, moving)
-    max_length: 700, // todo: replace this with max hexes + some for active
+    max_length: MAX_BUBBLES, // todo: replace this with max hexes + some for active
     depot: [null,null,null],
     shadow: [],
     carried: null,
-    init: function() {
-        // depot shadows
+    clear: function (index) {
+        this.list[index].data = null;
+        this.parent.imageViewPool.releaseView(this.list[index]);
+        this.empties.push(index);
+    },
+    reset: function () {
+        for (var i = 0; i < this.list.length; i++) {
+            this.clear(i);
+        }
+        this.list = [];
+        for (var i = 0; i < this.active.length; i++) {
+            if (this.active) {
+                this.parent.imageViewPool.releaseView(this.active[i]);
+            }
+        }
+        this.active = [];
         for (var i = 0; i < this.depot.length; i++) {
-            var bubble = new ui.ImageView({
-                superview: temp_stuff.UI_screen,
-                image: img_bubbles[0],
+            if (this.depot) {
+                this.parent.imageViewPool.releaseView(this.depot[i]);
+            }
+        }
+        this.depot = [null, null, null];
+        if (this.carried) {
+            this.parent.imageViewPool.releaseView(this.carried);
+        }
+        this.carried = null;
+        for (var i = 0; i < this.shadow.length; i++) {
+            if (this.shadow) {
+                this.parent.imageViewPool.releaseView(this.shadow[i]);
+            }
+        }
+        this.shadow = [];
+        this.empties = [];
+    },
+    init: function(parent) {
+        this.parent = parent;
+        // depot map shadows
+        for (var i = 0; i < this.depot.length; i++) {
+
+            var bubble = this.parent.imageViewPool.obtainView();
+            bubble.updateOpts({
+                superview: this.parent.UI_screen,
+                visible: true,
                 x: 0,
                 y: 0,
                 width: 80*1.25,
@@ -585,6 +685,9 @@ var Bubbles = {
                 offsetY: -80*1.25 * 0.5,
                 anchorX: 40*1.25,
                 anchorY: 40*1.25,
+                opacity: 0.75,
+                zIndex: 100,
+                scale: 1,
             });
             this.shadow.push(bubble);
         }
@@ -612,9 +715,10 @@ var Bubbles = {
 
         var type = t || get_random_inclusive(0, MAX_TYPES);
 
-        var bubble = new ui.ImageView({
-            superview: temp_stuff,
+        var bubble = this.parent.imageViewPool.obtainView();
+        bubble.updateOpts({
             image: img_bubbles[type],
+            visible: true,
             x: x,
             y: y,
             width: 80,
@@ -623,6 +727,9 @@ var Bubbles = {
             offsetY: -80 * 0.5,
             anchorX: 40,
             anchorY: 40,
+            opacity: 1,
+            zIndex: 40,
+            scale: 1,
         });
 
         bubble.data = {
@@ -643,11 +750,6 @@ var Bubbles = {
     },
     get_an_index: function () {
         return this.empties.pop(); // todo: TEST THIS!!!!
-    },
-    clear: function (index) {
-        this.list[index].data = null;
-        this.list[index].removeFromSuperview();
-        this.empties.push(index);
     },
     refill_depot: function (radius, dt) {
         for (var i = 0; i < this.depot.length; i++) {
@@ -763,7 +865,18 @@ function hex_neighbor_key(hex, direction)
     return key.q.toString() + key.r.toString() + (-key.q-key.r).toString();
 }
 var HexMap = {
+    parent: null,
     pts: [],
+    init: function (parent) {
+        this.parent = parent;
+    },
+    reset: function() {
+        for (var i = 0; i < this.pts.length; i++) {
+            this.pts[i].data = null;
+            this.pts[i].time = 0;
+            this.pts[i].time2 = 0;
+        }
+    },
     get_neighbors: function (key) {
         return [
             hex_neighbor_key(this.pts[key], 0),
@@ -786,7 +899,7 @@ var HexMap = {
         }
 
         var layout_flat = Orientation(3.0 / 2.0, 0.0, Math.sqrt(3.0) / 2.0, Math.sqrt(3.0), 2.0 / 3.0, 0.0, -1.0 / 3.0, Math.sqrt(3.0) / 3.0, 0.0);
-        var layout = Layout(layout_flat, {x:50,y:50}, {x:temp_stuff.halfwidth,y:temp_stuff.halfwidth});
+        var layout = Layout(layout_flat, {x:50,y:50}, {x:this.parent.halfwidth,y:this.parent.halfwidth});
 
         var inner_cutoff = 3;
         var outer_cutoff = 5;
@@ -857,7 +970,7 @@ function intersect_circle_circle (ax, ay, bx, by, ar, br) {
     return (dist - (r*r) <= 0);
 }
 /* ---------------------------------------------------
-    QUAD TREES
+    QUAD TREE
 */
 var MAX_ENTITIES = 15;
 var MAX_LEVELS = 20;

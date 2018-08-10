@@ -67,7 +67,6 @@ exports = Class(GC.Application, function () {
 
         gamescreen.on('gamescreen:end', function () {
             rootView.pop();
-            console.log("ENDED");
         });
     };
 
