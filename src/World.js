@@ -3,6 +3,8 @@ import ui.View;
 import ui.ImageView;
 import ui.resource.Image as Image;
 import math.geom.Point as Point;
+import math.util as util;
+import device;
 
 var img_circle = new Image({url: "resources/images/circle.png"});
 var debugcolor = new Image({url: "resources/images/debug.png"});
@@ -293,8 +295,28 @@ exports = Class(ui.View, function (supr) {
             height: this.style.height,
         });
 
+        var screen_width = this.getParents()[0].maxwidth;
+
+        this.UI_screen = new ui.View({
+            superview: temp_stuff,
+            x: this.halfwidth,
+            y: this.halfwidth,
+            width: screen_width,
+            height: this.halfwidth,
+            offsetX: -screen_width * 0.5,
+            offsetY: 0,
+            anchorX: screen_width/2,
+            anchorY: 0,
+            zIndex: 100,
+        });
+
+        Bubbles.init();
         Bubbles.refill_depot(this.halfwidth, 1);
         Enemy.init(this.halfwidth, this.halfwidth);
+
+        console.log(this.style.r, Bubbles.depot[0].rotation
+            , Bubbles.depot[1].rotation
+            , Bubbles.depot[2].rotation);
 
         HexMap.calculate_hexmap();
 
@@ -322,7 +344,18 @@ exports = Class(ui.View, function (supr) {
         this.pos.x = this.halfwidth + (Math.cos(this.rotation) * this.halfwidth * 0.9);
         this.pos.y = this.halfwidth + (Math.sin(this.rotation) * this.halfwidth * 0.9);
 
+        this.UI_screen.style.r = -this.style.r;
+
         Bubbles.refill_depot(this.halfwidth, dt);
+
+        Bubbles.depot_ui(this.UI_screen.style.x,
+            this.UI_screen.style.y,
+            this.UI_screen.style.r,
+            this.UI_screen.style.anchorX,
+            this.UI_screen.style.anchorY,
+            this.UI_screen.style.width,
+            this.UI_screen.style.height,
+            this.UI_screen.style.offsetX);
 
         Enemy.update(dt, vel, this.pos, this.player_radius);
 
@@ -340,6 +373,10 @@ exports = Class(ui.View, function (supr) {
         else {
             Bubbles.carried.style.x = this.pos.x;
             Bubbles.carried.style.y = this.pos.y;
+        }
+
+        for (var i = 0; i < Bubbles.depot.length; i++) {
+
         }
 
         var remaining_bubbles = [];
@@ -531,8 +568,27 @@ var Bubbles = {
     empties: [], // empty indices in bubble list
     active: [], // bubbles not paired with hex (ie, moving)
     max_length: 700, // todo: replace this with max hexes + some for active
-    depot: [null,null,null, null],
+    depot: [null,null,null],
+    shadow: [],
     carried: null,
+    init: function() {
+        // depot shadows
+        for (var i = 0; i < this.depot.length; i++) {
+            var bubble = new ui.ImageView({
+                superview: temp_stuff.UI_screen,
+                image: img_bubbles[0],
+                x: 0,
+                y: 0,
+                width: 80*1.25,
+                height: 80*1.25,
+                offsetX: -80*1.25 * 0.5,
+                offsetY: -80*1.25 * 0.5,
+                anchorX: 40*1.25,
+                anchorY: 40*1.25,
+            });
+            this.shadow.push(bubble);
+        }
+    },
     attach: function (el, key) {
         var index = null;
 
@@ -605,14 +661,36 @@ var Bubbles = {
 
                 this.create(x, y, null, 0, i);
                 this.depot[i].elapsed = dt;
+                this.depot[i].rotation = r;
+                this.shadow[i].setImage(this.depot[i].getImage());
             } else {
                 if (this.depot[i].elapsed < 1) {
-                    this.depot[i].elapsed += dt;
+                    this.depot[i].elapsed += dt/2;
                     this.depot[i].style.scale = this.depot[i].elapsed/1;
                 } else {
                     this.depot[i].elapsed = 1;
                     this.depot[i].style.scale = 1;
                 }
+            }
+        }
+    },
+    depot_ui: function (x, y, r, anchorX, anchorY, w, h, offsetX) {
+        // todo: maybe this can be optimized, because
+        // the center of rotation of the rect is at 0,0
+        for (var i = 0; i < this.depot.length; i++) {
+            var relX = this.depot[i].style.x - x;
+            var relY = this.depot[i].style.y - y;
+            var angle = -r;
+            var angleCos = Math.cos(angle);
+            var angleSin = Math.sin(angle);
+            var localX = angleCos * relX - angleSin * relY;
+            var localY = angleSin * relX + angleCos * relY;
+            if (localX >= -anchorX && localX <= w - anchorX && localY >= -anchorY && localY <= h - anchorY) {
+                this.shadow[i].style.opacity = 0;
+            } else {
+                this.shadow[i].style.opacity = 0.75;
+                this.shadow[i].style.x = util.clip(localX-offsetX, 0, w);
+                this.shadow[i].style.y = util.clip(localY, 0, h);
             }
         }
     },

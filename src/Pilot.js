@@ -34,6 +34,7 @@ exports = Class(ui.View, function (supr) {
             y: 0,
             width: img_pilot.getWidth(),
             height: img_pilot.getHeight(),
+            opacity: 0.25,
         });
     };
 });
